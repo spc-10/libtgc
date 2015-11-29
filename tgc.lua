@@ -21,23 +21,7 @@ local filename
 
 local MAX_COMP = 7
 
---- Converti une une note en points
--- TODO Utiliser une table de correspondance
--- @param grade "A", "B", "C" ou "D"
--- return score 10, 7, 3 ou 0
-local function grade_to_score (grade)
-  if (grade == "A") then
-    return 10
-  elseif (grade == "B") then
-    return 7
-  elseif (grade == "C") then
-    return 3
-  elseif (grade == "D") then
-    return 0
-  else
-    return nil
-  end
-end
+local grade_to_score = {A = 10, B = 7, C = 3, D = 0}
 
 --- Affichage d’un élève
 -- @param s table correspondant à un élève
@@ -46,43 +30,6 @@ local function log_entry (s)
   local lastname = s.lastname or "Inconnu"
 
   print(lastname .. " " .. name)
-
---  local score = {0, 0, 0, 0, 0, 0, 0}
---  local score_max = 0
---  local score_tot = 0
---
---  -- Lecture et affichage des notes
---  score[1] = grade_to_score(o.grade1)
---  score[2] = grade_to_score(o.grade2)
---  score[3] = grade_to_score(o.grade3)
---  score[4] = grade_to_score(o.grade4)
---  score[5] = grade_to_score(o.grade5)
---  score[6] = grade_to_score(o.grade6)
---  score[7] = grade_to_score(o.grade7)
---
---  -- Calcul du bareme et de la note
---  for n = 1, 7 do
---    if (score[n]) then
---      score_max = score_max + 10
---      score_tot = score_tot + score[n]
---    end
---  end
---
---    -- Affichage
---    print(lastname .. " " .. name
---    .. string.format("\t%2.0f / 20\t", math.ceil(score_tot / score_max * 20))
---    .. "[1 " .. o.grade1
---    .. ", 2 " .. o.grade2
---    .. ", 3 " .. o.grade3
---    .. ", 4 " .. o.grade4
---    .. ", 5 " .. o.grade5
---    .. ", 6 " .. o.grade6
---    .. ", 7 " .. o.grade7 .. "]")
---    --for n = 1, 7 do
---    --  print("Compétence " .. n .. " : " .. (score[n] or "/"))
---    --end
---    --print("Note : " .. score_tot .. " / " .. score_max)
---    -- print("\tTotal : " .. string.format("%2.0f / 20", math.ceil(score_tot / score_max * 20)))
 end
 
 --- Critère de tri d’un élève
@@ -145,10 +92,69 @@ local function write_students ()
     assert(f:close())
 end
 
+--- Estime la note chiffrée moyenne du trimestre
+-- @param grades les notes moyennes du trimestre (sous la forme "1A2B3C4D")
+-- @param score_max
+-- @return note moyenne
+local function quarter_score (grades, score_max)
+    local score_max = score_max or 20
+
+    local total_score = 0
+    local grades_nb = 0
+
+    if not grades then return nil end
+
+    for s in string.gmatch(grades, "[1234567][AaBbCcDd]") do
+        total_score = total_score + grade_to_score[string.upper(s:sub(2))]
+        grades_nb = grades_nb + 1
+    end
+    return math.ceil(total_score / grades_nb / 10 * score_max)
+end
+
+--- Estime les notes moyennes du trimestre.
+-- @param quarter_grades table contenant les notes d'un trimestre par
+-- compétence.
+local function estimate_mean (quarter_grades)
+    local estimation = ""
+    if not quarter_grades then return "" end
+
+    for n = 1, MAX_COMP do
+        if quarter_grades[n] then
+            local total_score = 0
+            local mean_score
+            local grades_nb = 0
+            for s in string.gmatch(quarter_grades[n], "[AaBbCcDd]") do
+                total_score = total_score + grade_to_score[s:upper()]
+                grades_nb = grades_nb + 1
+            end
+            mean_score = total_score / grades_nb
+            
+            -- Conversion au fealing (AAB -> A, CDD -> C)
+            if mean_score >= 9 then estimation = estimation .. n .. "A"
+            elseif mean_score > 5 then estimation = estimation .. n .. "B"
+            elseif mean_score >= 1 then estimation = estimation .. n .. "C"
+            else estimation = estimation .. n .. "D"
+            end
+        end
+    end
+    return estimation
+end
+
+--- Affiche l’estimation de la moyenne des notes pour le trimestre.
+-- @param quarter_grades table contenant les notes d'un trimestre par
+-- compétence.
+local function print_estimated_mean (quarter_grades)
+    if not quarter_grades then return end
+
+    estimation = estimate_mean(quarter_grades)
+    print ("Bilan suggéré : " .. estimation .. "\t(" .. quarter_score(estimation) .. "/20)")
+end
+
 --- Affiche les notes du trimestre à partir d’une table de notes du trimestre
 --!.
--- @param quarter_grades la table à afficher
-local function print_quarter_grades(quarter_grades)
+-- @param quarter_grades table contenant les notes d'un trimestre par
+-- compétence.
+local function print_quarter_grades (quarter_grades)
     if not quarter_grades then print("Pas de notes ce trimestre") return end
 
     for n = 1, MAX_COMP do
@@ -164,7 +170,8 @@ end
 --- notes de chaque éval.
 -- @param evals la table des évaluations de l’élève
 -- @param q le numéro du trimestre
-local function get_quarter_grades(evals, q)
+-- @return quarter_grades table des notes du trimestre
+local function get_quarter_grades (evals, q)
     local quarter_grades = {}
     if not evals then return nil end
 
@@ -190,7 +197,7 @@ end
 -- @param type "eval" ou "mean" selon qu’on souhaite entrer une note
 --   d’évaluation ou la moyenne du trimestre. Défaut : eval
 -- @return grades
-local function read_grades(type)
+local function read_grades (type)
     local tmpgrades
     local grades
 
@@ -214,7 +221,7 @@ end
 -- Demande les informations nécessaire pour ajouter un ou plusieurs élèves
 -- d’une classe à la base de données
 -- TODO Vérifier si la table contient les données nécessaires
-local function menu_add_student()
+local function menu_add_student ()
     local class
     local lastname, name, remark
     local n = 1
@@ -331,10 +338,11 @@ local function menu_add_mean ()
             print_quarter_grades(quarter_grades)
             -- Afficher les moyennes si elles existent déjà
             if students[n].means[quarter] ~= "" then
-                print("Laisser vide pour garder la moyenne actuelle : " .. students[n].means[quarter])
+                print("Laisser vide pour garder la moyenne actuelle : " .. students[n].means[quarter]
+                    .. "\t(" .. quarter_score(students[n].means[quarter]) .. "/20)")
             end
             -- Afficher une suggestion pour la moyenne
-            --print_suggested_mean(quarter_grades)
+            print_estimated_mean(quarter_grades)
 
             grades = read_grades("mean")
 
