@@ -19,18 +19,15 @@ Ce programme est une tentative de gestion des compétence.
 local students = {}
 local filename
 
+local nb_students = 0
+
+local default_class
+local default_date
+local default_quarter = 1
+
 local MAX_COMP = 7
 
 local grade_to_score = {A = 10, B = 7, C = 3, D = 0}
-
---- Affichage d’un élève
--- @param s table correspondant à un élève
-local function log_entry (s)
-  local name = s.name or "Inconnu"
-  local lastname = s.lastname or "Inconnu"
-
-  print(lastname .. " " .. name)
-end
 
 --- Critère de tri d’un élève
 -- @param a élève a
@@ -44,6 +41,7 @@ end
 -- @param s table élève
 local function add_student (s)
     table.insert(students, s)
+    nb_students = nb_students + 1
 end
 
 --- Écriture de la table d’un élève
@@ -66,11 +64,13 @@ local function write_student (s)
     end
     f:write("\t},\n")
     f:write("\tmeans = {")
-    for n = 1, 3 do
-        if s.means[n] then
-            f:write("[", n, "] = \"", s.means[n], "\", ")
-        else
-            f:write("[", n, "] = \"\", ")
+    if s.means then
+        for n = 1, 3 do
+            if s.means[n] then
+                f:write("[", n, "] = \"", s.means[n], "\", ")
+            else
+                f:write("[", n, "] = \"\", ")
+            end
         end
     end
     f:write("\t},\n")
@@ -88,6 +88,8 @@ local function write_students ()
     for n = 1, #students do
         write_student(students[n])
     end
+
+    print("Fichier sauvegardé (" .. #students .. " élèves)")
 
     assert(f:close())
 end
@@ -192,17 +194,74 @@ local function get_quarter_grades (evals, q)
     return quarter_grades
 end
 
---- Lecture d’une série de notes sur l’entrée standard.
--- Les notes sont de la forme 1a2b3c4d.
--- @param type "eval" ou "mean" selon qu’on souhaite entrer une note
---   d’évaluation ou la moyenne du trimestre. Défaut : eval
--- @return grades
+--- Lit le nom d’une classe sur l’entrée standard.
+-- @return class Le nom de la classe
+local function read_class ()
+    local class
+    local default_string
+
+    if default_class then default_string = " (défaut : " .. default_class .. ")" else default_string = "" end
+    repeat
+        print("Quel est le nom de la classe" .. default_string .. " ?")
+        class = io.read() or ""
+        if class == "" and default_class then class = default_class end
+    until class ~= ""
+    -- Enregistrer la classe comme valeur par défaut pour le prochain usage
+    default_class = class
+
+    return class
+end
+
+--- Lit une date sur l’entrée standard
+-- @return date La date
+local function read_date ()
+    local date
+    local default_string
+
+    if default_date then default_string = " (défaut : " .. default_date .. ")" else default_string = "" end
+    repeat
+        print("Quel est la date de l’évaluation au format jj/mm/aaaa" .. default_string .. " ?")
+        date = io.read() or ""
+        -- TODO Vérifier si la date est correcte
+        date = string.match(date, "(%d%d?/%d%d?/%d%d%d%d)")
+        if not date and default_date then date = default_date end
+    until date ~= ""
+    -- Enregistrer la date comme valeur par défaut pour le prochain usage
+    default_date = date
+
+    return date
+end
+
+--- Lit un numéro de trimestre sur l’entrée standard
+-- @return quarter Le numéro du trimestre
+local function read_quarter ()
+    local quarter
+    local default_string
+
+    if default_quarter then default_string = " (défaut : " .. default_quarter .. ")" else default_string = "" end
+    repeat
+        print("Quel est le trimestre" .. default_string .. " ?")
+        quarter = io.read()
+        quarter = tonumber(quarter)
+        if not quarter and default_quarter then quarter = default_quarter end
+    until quarter == 1 or quarter == 2 or quarter == 3
+    -- Enregistrer le trimestre comme valeur par défaut pour le prochain usage
+    default_quarter = quarter
+
+    return quarter
+end
+
+--- Lit un ensemble de notes.
+-- Le lecture concerne soit une éval (plusieurs notes possibles par
+-- compétence), soit la moyenne (une seule note par compétence).
+-- @param type Le type de lecture ("mean" pour la moyenne, sinon eval).
+-- @return grades Note formatées correctement
 local function read_grades (type)
     local tmpgrades
     local grades
 
     type = type or "eval"
-    tmpgrades = io.read()
+    tmpgrades = io.read() or ""
 
     if type == "mean" then
         for g in string.gmatch(tmpgrades, "[1234567][AaBbCcDd]") do
@@ -217,6 +276,24 @@ local function read_grades (type)
     return grades or ""
 end
 
+--- Affichage des moyennes
+-- @param class La classe à afficher
+-- @param quarter Le trimestre souhaité
+local function log_means (class, quarter)
+    if quarter ~= 1 and quarter ~= 2 and quarter ~= 3 then print("q = ", quarter) return end
+
+    for n = 1, #students do
+        if students[n].class == class then
+            io.write(students[n].lastname, " ", students[n].name, " ")
+            if students[n].means[quarter] then
+                io.write(quarter_score(students[n].means[quarter]), "/20 ")
+                io.write(students[n].means[quarter])
+            end
+            io.write("\n")
+        end
+    end
+end
+
 --- Menu ajout d’élèves.
 -- Demande les informations nécessaire pour ajouter un ou plusieurs élèves
 -- d’une classe à la base de données
@@ -224,28 +301,24 @@ end
 local function menu_add_student ()
     local class
     local lastname, name, remark
-    local n = 1
 
     local student = {}
 
-    print("Quel est le nom de la classe (exemple : 4e3) ?")
-
-    class = io.read()
+    class = read_class()
 
     print("Entrez un élève par ligne en respectant la syntaxe suivante :")
     print("Nom, Prénom, Remarque sur la dyslexie ou un PAI")
     print("Pour finir l’enregistrement, entrez une ligne vide")
     repeat
-        line = io.read()
-        n = n + 1
-        lastname, name, remark = string.match(line, "^(%a+-*%a+)%s*,%s*(%a+-*%a+)%s*,*%s*(.*)$")
-        remark = remark or ""
+        line = io.read() or ""
+
+        lastname, name, remark = string.match(line, "^([^%s,]+)%s*,%s*([^%s,]+)%s*,*%s*(.*)$")
         if lastname and name then
             student = {
                 lastname = lastname,
                 name = name,
                 class = class,
-                remark = remark
+                remark = remark or ""
             }
             add_student(student)
             -- print("Nom : " .. lastname .. "\t Prénom : " .. name .. "\t Remarque : " .. remark)
@@ -262,17 +335,12 @@ local function menu_add_eval ()
     -- TODO vérifier si c’est nécessaire pour optimiser
     table.sort(students, sort_students)
 
-    -- TODO Gérer les valeurs par défaut
-    print("Quel est le nom de la classe (exemple : 4e3) ?")
-    class = io.read()
-    print("Quel est le titre de l’évaluation (défaut : Évaluation) ?")
-    name = io.read()
-    if name == "" then name = "Évaluation" end
-    print("Quel est la date de l’évaluation ?")
-    date = io.read()
-    print("Trimestre concerné (défaut : 1) ?")
-    quarter = io.read()
-    if not (quarter == 1 or quarter == 2 or quarter == 3) then quarter = 1 end
+    class = read_class()
+    print("Quel est le titre de l’évaluation ?")
+    name = io.read() or ""
+
+    date = read_date()
+    quarter = read_quarter()
 
     print("Entrez les notes de l’élève sous la forme : 1a2b3ca4ba*")
     print("où le nombre indique le numéro de la compétence et la lettre la note")
@@ -318,11 +386,8 @@ local function menu_add_mean ()
     table.sort(students, sort_students)
 
     -- TODO Gérer les valeurs par défaut
-    print("Quel est le nom de la classe (exemple : 4e3) ?")
-    class = io.read()
-    print("Trimestre concerné ?")
-    quarter = io.read()
-    if not (quarter == 1 or quarter == 2 or quarter == 3) then quarter = 1 end
+    class = read_class()
+    quarter = read_quarter()
 
     print("Entrez les notes de l’élève sous la forme : 1a2b3a4b...")
     print("où le nombre indique le numéro de la compétence et la lettre la note")
@@ -360,13 +425,21 @@ end
 --- Menu principal.
 -- Demande à l’utilisateur les actions souhaitées
 local function main_menu()
+    local line
+
     repeat
         print([[Que voulez-vous faire ?
     (1) Ajouter des élèves d’une classe
     (2) Ajouter une évaluation
-    (3) Bilan des compétences
+    (3) Ajouter le bilan des compétences
+    (4) Afficher les moyennes
+
+    (9) Sauvegarde
     (q) Quitter]])
-        line = io.read()
+        repeat
+            line = io.read()
+            if not line then os.exit() end
+        until line ~= ""
 
         if (line == "1") then
             menu_add_student()
@@ -374,8 +447,20 @@ local function main_menu()
             menu_add_eval()
         elseif (line == "3") then
             menu_add_mean()
+        elseif (line == "4") then
+            local class
+            local quarter
+            class = read_class()
+            quarter = read_quarter()
+            log_means(class, quarter)
+        elseif (line == "9") then
+            write_students()
         end
     until line == "q" or line == "Q"
+
+    print("Voulez-vous sauvegarder avant de quitter (O/n) ?")
+    line = io.read() or "n"
+    if line == "O" or line == "o" or line == "" then write_students() end
 end
 
 -- Lecture du fichier de données
@@ -385,11 +470,8 @@ filename = arg[1]
 if (not filename) then error ("Aucun fichier spécifié") end
 entry = add_student
 dofile(filename)
+print("Fichier lu (" .. nb_students .. " élèves).")
 
+-- Lancement de l’interface
 main_menu()
 
-write_students()
-
---for n = 1, #students do
---  log_entry(students[n])
---end
