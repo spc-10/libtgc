@@ -29,11 +29,32 @@ local MAX_COMP = 7
 
 local grade_to_score = {A = 10, B = 7, C = 3, D = 0}
 
+local competence = {
+    {name = "Langage scientifique"},
+    {name = "Compréhension et application"},
+    {name = "Raisonnement"},
+    {name = "Outils scientifiques"},
+    {name = "Aptitudes expérimentales"},
+    {name = "Travail, Autonomie"},
+    {name = "Respect des règles"},
+}
+
 --- Critère de tri d’un élève
 -- @param a élève a
 -- @param b élève b
 local function sort_students (a, b)
     return a.class .. a.lastname .. a.name < b.class .. b.lastname .. b.name
+end
+
+--- Détermine le nom de la photo d’un élève.
+-- @param lastname Le nom de l’élève
+-- @param name Le prénom de l’élève
+-- @param class La classe de l’élève
+-- @param dir Le répertoire racine des photos
+function picturename (name, lastname, class, dir)
+    dir = dir or "/home/roms/boulot/college/eleves/2015-2016/trombines"
+    name = string.gsub(name:lower(), "^%a", string.upper)
+    return dir .. "/" .. class .. "/" .. lastname:upper() .. " " .. name -- .. ".jpg"
 end
 
 --- Ajout d’un élève à la base de données
@@ -64,13 +85,11 @@ local function write_student (s)
     end
     f:write("\t},\n")
     f:write("\tmeans = {")
-    if s.means then
-        for n = 1, 3 do
-            if s.means[n] then
-                f:write("[", n, "] = \"", s.means[n], "\", ")
-            else
-                f:write("[", n, "] = \"\", ")
-            end
+    for n = 1, 3 do
+        if s.means and s.means[n] then
+            f:write("[", n, "] = \"", s.means[n], "\", ")
+        else
+            f:write("[", n, "] = \"\", ")
         end
     end
     f:write("\t},\n")
@@ -294,6 +313,118 @@ local function log_means (class, quarter)
     end
 end
 
+--- Écriture de fiches récapitulatives des notes des élèves dans un fichier
+-- ConTeXt.
+-- @param class Limiter l’écriture à cette classe
+-- @param quarter Limiter l’écriture à ce trimestre
+-- TODO ce limiter à un élève
+local function write_context_log (class, quarter)
+    quarter = quarter or 1
+    local o = assert(io.open(ctx_output, "w"))
+
+    -- On trie d’abord les élèves
+    table.sort(students, sort_students)
+
+    o:write([==[
+\usemodule[french]
+
+\setuppapersize[A4,landscape]
+\setupbodyfont[sans,24pt]
+
+\definecolor[maincolor][h=31363b]
+\definecolor[colorA][h=11d116]
+\definecolor[colorB][colorA]
+\definecolor[colorC][h=f67400]
+\definecolor[colorD][h=c0392b]
+\definecolor[colorT][h=bdc3c7]
+
+\setuplayout
+    [width=middle,
+    height=middle,
+    backspace=0.3cm,
+    topspace=0.3cm,
+    header=0cm,
+    footer=0cm,]
+
+\startdocument
+
+]==])
+    for n = 1, #students do
+        if not class or students[n].class == class then
+            local quarter_grades = get_quarter_grades(students[n].evaluations, quarter)
+            local picture = picturename(students[n].name, students[n].lastname, students[n].class)
+            local score
+            if students[n].means[quarter] then score = quarter_score(students[n].means[quarter]) end
+            o:write([==[
+\startxtable
+    [option=stretch,
+    align={middle,lohi},
+    frame=off]
+    \startxrow[foregroundcolor=maincolor]]==])
+            o:write("\n\t\t\\startxcell[loffset=0.7em] \\externalfigure[", picture, "][height=0.20\\textwidth] \\stopxcell\n")
+            -- TODO Gérer le trimestre
+            -- Afficher les longs noms sur deux lignes
+            local sep
+            if string.len(students[n].lastname .. students[n].name) > 15 then sep = "\\\\ " else sep = " " end
+            o:write("\t\t\\startxcell {\\bfd ", students[n].lastname, sep, students[n].name, "}\\\\ 1\\ier~trimestre \\stopxcell\n")
+            o:write("\t\t\\startxcell \\bfd ", string.gsub(students[n].class, "e", "\\ieme\\,"), " \\stopxcell\n")
+            o:write("\t\\stopxrow\n\\stopxtable\n\n\\blank[big]\n\n")
+
+            o:write([==[
+\startxtable
+    [option=stretch,
+    align={middle,lohi},
+    framecolor=white,
+    height=3.25ex,
+    toffset=.3ex]                                                                                                                ]==])
+            -- Compétences
+            for comp = 1, 7 do
+                local mean
+                if students[n].means[quarter] then
+                    mean = string.match(students[n].means[quarter], comp .. "([ABCDabcd])")
+                    if mean then mean = mean:upper() end
+                end
+                o:write("\t\\startxrow\n\t\t\\startxcell ", comp, " \\stopxcell\n")
+                o:write("\t\t\\startxcell[align={right,lohi}] \\bold{", competence[comp].name, "} \\stopxcell\n")
+                for m = 1, 6 do -- Affichage des 6 notes de la compétences
+                    local note
+                    if quarter_grades[comp] then
+                        note = string.sub(quarter_grades[comp], m, m)
+                        note = note:upper()
+                    end
+                    if note == "A" or note == "B" or note == "C" or note == "D" then
+                        o:write("\t\t\\startxcell[foregroundcolor=color", note, "] ", note, " \\stopxcell\n")
+                    else
+                        o:write("\t\t\\startxcell \\stopxcell\n")
+                    end
+                end
+                if mean then
+                    o:write("\t\t\\startxcell[background=color,backgroundcolor=color", mean, "] ", mean, " \\stopxcell\n")
+                else
+                    o:write("\t\t\\startxcell[background=color,backgroundcolor=colorT] \\stopxcell\n")
+                end
+                o:write("\t\\stopxrow\n")
+            end    
+            o:write([==[
+   \startxrow
+        \startxcell[nx=9] \strut \stopxcell
+    \stopxrow
+    \startxrow
+        \startxcell[nx=5] \stopxcell
+        \startxcell[nx=3] Note \stopxcell
+]==])
+            o:write("\t\t\\startxcell[background=color,backgroundcolor=colorT] \\bfa ", score, " \\stopxcell\n")
+            o:write("\t\\stopxrow\n\\stopxtable\n\n\\page\n\n")
+
+        end
+    end
+
+
+
+
+    assert(o:close())
+end
+
 --- Menu ajout d’élèves.
 -- Demande les informations nécessaire pour ajouter un ou plusieurs élèves
 -- d’une classe à la base de données
@@ -433,6 +564,7 @@ local function main_menu()
     (2) Ajouter une évaluation
     (3) Ajouter le bilan des compétences
     (4) Afficher les moyennes
+    (5) ConTeXt
 
     (9) Sauvegarde
     (q) Quitter]])
@@ -453,6 +585,8 @@ local function main_menu()
             class = read_class()
             quarter = read_quarter()
             log_means(class, quarter)
+        elseif (line == "5") then
+            write_context_log()
         elseif (line == "9") then
             write_students()
         end
@@ -467,6 +601,7 @@ end
 -- TODO Vérifier si le fichier existe
 -- TODO Ajouter la possibilité de partir d’un fichier vide
 filename = arg[1]
+ctx_output = "tmp.tex"
 if (not filename) then error ("Aucun fichier spécifié") end
 entry = add_student
 dofile(filename)
