@@ -16,6 +16,8 @@ M = {}
 
 --------------------------------------------------------------------------------
 
+local find, match = string.find, string.match
+
 local DEFAULT_DB_FILE = "" -- TODO
 
 --------------------------------------------------------------------------------
@@ -101,7 +103,8 @@ end
 --------------------------------------------------------------------------------
 
 M.Database = {
-    students = {}
+    students = {}, -- liste des élèves
+    classes = {}, -- liste des classes
 }
 M.Database.__index = M.Database
 
@@ -180,7 +183,9 @@ function M.Database:read (file)
     function entry (o)
         local student = readstudent(o)
         table.insert(self.students, student)
+        self:addclass(student.class)
     end
+
     dofile(file)
 
     print("Database : " .. #self.students .. " élèves lus.")
@@ -189,19 +194,39 @@ end
 --- Ajout d’une classe à la liste des classes en cours d’utilisation.
 -- Chaque fois qu’un élève est ajouté à la base de données, on stocke la classe
 -- concernée dans une liste
--- @param classname (string) - le nom de la classe
-function M.Database:addclass (classname)
-    -- TODO
-    -- [] ajouter la table d'office dans la base de données -> évite certains tests
-    -- [] 
-    self.classes = self.classes or {}
-
-    local class
-
+-- @param class (string) - le nom de la classe
+function M.Database:addclass (class)
+    local found = nil
     for n = 1, #self.classes do
-        if (classname == self.classes) then end
+        if (class == self.classes[n]) then
+            found = true
+            break
+        end
+    end
+    if not found then table.insert(self.classes, class) end
+end
+
+--- Renvoie la liste des classes correspondant aux motifs.
+-- La recherche s’effectue dans la liste des classes des élèves de la base de
+-- données
+-- @param ... (string) - le ou les motifs de recherche du nom de la classe
+-- @return classes (table) - liste des classes correspondant au motif
+function M.Database:getclasses (...)
+    local classes = {}
+
+    for _i, pattern in ipairs {...} do
+        if type(pattern) == "string" then
+            if not find(pattern, "^%^") then pattern = "^" .. pattern end
+            if not find(pattern, "%$$") then pattern = pattern .. "$" end
+
+            for n = 1, #self.classes do
+                local class = match(self.classes[n], pattern)
+                if class then table.insert(classes, class) end
+            end
+        end -- TODO else print erreur
     end
 
+    return classes
 end
 
 return M
