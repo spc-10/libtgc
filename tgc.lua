@@ -1,24 +1,38 @@
 #! /usr/bin/lua5.3
 
--- TODO: 
+-- TODO:
 -- [] classes : ajout des classes à la liste
 -- [] évaluations : ajout des évaluations à la liste
 
 local libdir = os.getenv("HOME") .. "/lib/lua"
 package.path = package.path .. ";" .. libdir .. "/?"
-package.path = package.path .. ";" .. libdir .. "/?.lua"                                                                             
+package.path = package.path .. ";" .. libdir .. "/?.lua"
 
 helpers = require("helpers")
+lpeg = require("lpeg")
 
 M = {}
+
+-- Constantes
+local MAX_COMP = 7 -- Nombre maximal de compétences
+local GRADE_TO_SCORE = {A = 10, B = 7, C = 3, D = 0}
 
 -- Quelques raccourcis.
 local find, match, format = string.find, string.match, string.format
 local stripaccents = helpers.stripAccents
 
+local P, S, V, R = lpeg.P, lpeg.S, lpeg.V, lpeg.R
+local C, Cb, Cc, Cg, Cs, Cmt = lpeg.C, lpeg.Cb, lpeg.Cc, lpeg.Cg, lpeg.Cs, lpeg.Cmt
+
+
+
 --------------------------------------------------------------------------------
 -- Helpers
 --------------------------------------------------------------------------------
+local function round (num)
+	if num >= 0 then return math.floor(num+.5)
+	else return math.ceil(num-.5) end
+end
 
 --- Fonction de tri des élèves par classe puis par nom.
 -- Les lettres accentuées sont remplacées par leur équivalent non accentué
@@ -29,7 +43,7 @@ end
 
 --- Fonction de tri des évaluations par date.
 local function sort_evals_bydate (a, b)
-	return a.date < b.date
+	return a.quarter .. a.date < b.quarter .. b.date
 end
 
 --- Itérateur des élèves d’une classe
@@ -54,13 +68,132 @@ function M.evals_in_quarter (evals, quarter)
         while true do
             n = n + 1
             if not evals[n] then return nil end
-            if evals[n].quarter and evalss[n].quarter == quarter then
+            if evals[n].quarter and evals[n].quarter == quarter then
                 return n
             end
         end
     end
 end
 local evals_in_quarter = M.evals_in_quarter
+
+--------------------------------------------------------------------------------
+-- Notes
+--------------------------------------------------------------------------------
+
+M.Grades = {
+    -- 1 = "ABCDA*",
+    -- 2 = "ABCDA*",
+    -- 3 = "ABCDA*",
+    -- ...
+}
+for n = 1, MAX_COMP do M.Grades[n] = "" end -- Initialisation des compétences
+--M.Grades.__add = M.Grades.add
+
+local Grades = M.Grades
+
+-- Patterns lpeg
+local digit =  R("19")
+local lower_grade_letter = S("abcd")
+local upper_grade_letter = S("ABCD")
+local grade_letter = upper_grade_letter + lower_grade_letter
+local star = P("*")
+local grade = grade_letter * star^0
+local cgrade = C(grade_letter) * star^0
+
+local comp_grades = grade^1
+local comp_number = digit -- 9 compétences max pour le moment
+local not_comp = 1 - comp_number * comp_grades
+
+local comp_pattern = (not_comp)^0 * C(comp_number) * C(comp_grades) * (not_comp)^0
+
+--- Création d’une nouvelle note.
+-- @param s (string) - la liste des notes sous la forme "1AA2B3A*C1D.."
+function M.Grades:new (s)
+    s = s or ""
+    local o = {}
+    setmetatable(o, self)
+    self.__index = self
+    self.__add = self.add
+
+    -- convertit la note texte en table
+    local comp_pattern_s =
+        (comp_pattern / function(a,b) o[tonumber(a)] = (o[tonumber(a)] or "") .. string.upper(b) end)^1
+    lpeg.match(comp_pattern_s, s)
+
+    return o
+end
+
+--- Convertion de la note en chaîne de caractère de la "1AA2B3A*C".
+-- @param sep (string) - séparateur à ajouter entre les notes des différentes
+-- compétences
+-- @return (string)
+function M.Grades:tostring (sep)
+	sep = sep or ""
+    local l = {}
+    for n = 1, MAX_COMP do
+        if self[n] ~= "" then l[#l + 1] = tostring(n) .. tostring(self[n]) end
+    end
+
+    return table.concat(l, sep) or ""
+end
+
+--- Calcul de la moyenne de la note
+-- @return res (Grades) - moyenne
+function M.Grades:getmean ()
+    local estimation = ""
+
+    for n = 1, MAX_COMP do
+		if self[n] ~= "" then
+			local total_score, grades_nb = 0, 0
+			local grade_pattern_s =
+				(cgrade / function(a) total_score = total_score + GRADE_TO_SCORE[a]
+					grades_nb = grades_nb + 1
+					return nil
+				end)^1
+			lpeg.match(grade_pattern_s, self[n])
+
+			local mean_score = total_score / grades_nb
+
+			-- Conversion à la louche (AAB -> A, CDD -> C)
+			if mean_score >= 9 then estimation = estimation .. n .. "A"
+			elseif mean_score > 5 then estimation = estimation .. n .. "B"
+			elseif mean_score >= 1 then estimation = estimation .. n .. "C"
+			else estimation = estimation .. n .. "D"
+			end
+		end
+    end
+	return Grades:new(estimation)
+end
+
+--- Calcul de la note chiffrée correspondant à la note
+-- @param score_max (number) - la note maximale
+-- @return score (number) - note chiffrée
+function M.Grades:getscore (score_max)
+	score_max = score_max or 20
+	local total_score, grades_nb = 0, 0
+	local mean_grades = self:getmean() -- On ne calcule une note chiffrée que sur une moyenne
+
+    for n = 1, MAX_COMP do
+		if mean_grades[n] ~= "" then
+			total_score = total_score + GRADE_TO_SCORE[mean_grades[n]]
+			grades_nb = grades_nb + 1
+		end
+    end
+	
+	if grades_nb > 0 then
+		return round(total_score / grades_nb / GRADE_TO_SCORE["A"] * score_max)
+	else
+		return nil
+	end
+end
+
+--- Addition de deux notes (métaméthode)
+-- @param a (Grades) - première note à additionner
+-- @param b (Grades) - seconde note à additionner
+-- @return (Grades) - somme des deux notes
+function M.Grades.add (a, b)
+    return Grades:new(a:tostring() .. b:tostring())
+end
 
 --------------------------------------------------------------------------------
 -- Moyennes
@@ -76,7 +209,7 @@ local Mean = M.Mean
 
 --- Création d’une nouvelle moyenne.
 -- @param o - table contenant les attributs de la moyenne
-function M.Mean:create (o)
+function M.Mean:new (o)
     o = o or {}
     setmetatable(o, self)
     self.__index = self
@@ -89,7 +222,7 @@ end
 function M.Mean:write (f)
     f:write("\t\t{")
     f:write(format("quarter = \"%s\", ", self.quarter or ""))
-    f:write(format("grades = \"%s\", ", self.grades or ""))
+    f:write(format("grades = \"%s\", ", self.grades:tostring()))
     f:write(format("score = \"%s\", ", self.score or ""))
     f:write("},\n")
 end
@@ -109,7 +242,7 @@ local EvalResult = M.EvalResult
 
 --- Création d’une nouvelle évaluation.
 -- @param o - table contenant les attributs de l’évaluation
-function M.EvalResult:create (o)
+function M.EvalResult:new (o)
     o = o or {}
     setmetatable(o, self)
     self.__index = self
@@ -124,7 +257,7 @@ function M.EvalResult:write (f)
     f:write(format("name = \"%s\", ", self.name or ""))
     f:write(format("date = \"%s\", ", self.date or ""))
     f:write(format("quarter = \"%s\", ", self.quarter or ""))
-    f:write(format("grades = \"%s\", ", self.grades or ""))
+    f:write(format("grades = \"%s\", ", self.grades:tostring()))
     f:write("},\n")
 end
 
@@ -146,7 +279,7 @@ local Student = M.Student
 
 --- Création d’un nouvel élève.
 -- @param o - table contenant les attributs de l’élève
-function M.Student:create (o)
+function M.Student:new (o)
     o = o or {}
     setmetatable(o, self)
     self.__index = self
@@ -198,7 +331,6 @@ M.Database = {
     students = {}, -- liste des élèves
     classes = {}, -- liste des classes
 }
-M.Database.__index = M.Database
 
 local Database = M.Database
 
@@ -212,7 +344,7 @@ local function readstudent (o)
             o.lastname or "", o.name or "", o.class or ""))
         return nil -- L’élève ne sera pas ajouté
     end
-    local student = Student:create{lastname = o.lastname,
+    local student = Student:new{lastname = o.lastname,
         name = o.name,
         class = o.class,
         special = o.special or ""}
@@ -224,10 +356,10 @@ local function readstudent (o)
             local eval
             if type(o.evaluations[i]) == "table" then
                 if o.evaluations[i].date and o.evaluations[i].quarter then -- date, trimestre obligatoires
-                    eval = EvalResult:create{name = o.evaluations[i].name or "",
+                    eval = EvalResult:new{name = o.evaluations[i].name or "",
                         date = o.evaluations[i].date,
                         quarter = o.evaluations[i].quarter,
-                        grades = o.evaluations[i].grades or ""}
+                        grades = Grades:new(o.evaluations[i].grades or "")}
                 else
                     io.write(format("Erreur de lecture : évaluation sans date ou trimestre [%s %s %s]\n",
                         student.name, student.lastname, student.class))
@@ -250,8 +382,8 @@ local function readstudent (o)
             local mean
             if type(o.means[i]) == "table" then
                 if o.means[i].quarter then -- trimestre obligatoire
-                    mean = Mean:create{quarter = o.means[i].quarter,
-                        grades = o.means[i].grades or "",
+                    mean = Mean:new{quarter = o.means[i].quarter,
+                        grades = Grades:new(o.means[i].grades or ""),
                         score = o.means[i].score or ""}
                 else
                     io.write(format("Erreur de lecture : moyenne sans trimestre [%s %s %s]\n",
@@ -273,9 +405,11 @@ end
 
 
 --- Création d’une nouvelle Database.
-function M.Database.create ()
-    local self = setmetatable({}, Database)
-    return self
+function M.Database:new ()
+    local o = {}
+    setmetatable(o, self)
+    self.__index = self
+    return o
 end
 
 --- Lecture de la base de données depuis un fichier.
