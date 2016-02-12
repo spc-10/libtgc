@@ -196,20 +196,20 @@ function M.Grades.add (a, b)
 end
 
 --------------------------------------------------------------------------------
--- Moyennes
+-- Moyennes du trimestre
 --------------------------------------------------------------------------------
 
-M.Mean = {
+M.Report = {
     -- quarter = "1",
     -- grades = Grades,
     -- score = "12",
 }
 
-local Mean = M.Mean
+local Report = M.Report
 
 --- Création d’une nouvelle moyenne.
 -- @param o - table contenant les attributs de la moyenne
-function M.Mean:new (o)
+function M.Report:new (o)
     o = o or {}
     setmetatable(o, self)
     self.__index = self
@@ -219,7 +219,7 @@ end
 
 --- Écriture d’une moyenne dans la base de données.
 -- @param f (file) - fichier ouvert en écriture
-function M.Mean:write (f)
+function M.Report:write (f)
     f:write("\t\t{")
     f:write(format("quarter = \"%s\", ", self.quarter or ""))
     f:write(format("grades = \"%s\", ", self.grades:tostring()))
@@ -272,7 +272,7 @@ M.Student = {
     -- class = "5e1",
     -- special = "dys, pai, aménagements",
     -- evaluations = {EvalResult, ...},
-    -- means = {Mean, ...}
+    -- reports = {Report, ...}
 }
 
 local Student = M.Student
@@ -306,10 +306,10 @@ function M.Student:write (f)
 	f:write("\t},\n")
 
 	-- Moyennes
-	f:write("\tmeans = {\n")
-	if self.means then
-		for n = 1, #self.means do
-			self.means[n]:write(f)
+	f:write("\treports = {\n")
+	if self.reports then
+		for n = 1, #self.reports do
+			self.reports[n]:write(f)
 		end
 	end
 	f:write("\t},\n")
@@ -326,11 +326,11 @@ function M.Student:addeval (eval)
 end
 
 --- Ajout d’une moyenne trimestrielle à la liste des moyennes de l’élève
--- @param mean (Mean) - la moyenne à ajouter
-function M.Student:addmean (mean)
-    self.means = self.means or {}
+-- @param report (Report) - la moyenne à ajouter
+function M.Student:addreport (report)
+    self.reports = self.reports or {}
 
-    table.insert(self.means, mean)
+    table.insert(self.reports, report)
 end
 
 --- Vérifie si l’élève est dans la classe demandée.
@@ -341,12 +341,12 @@ end
 
 --- Renvoie la moyenne du trimestre demandé
 -- @param quarter (string) - trimestre
--- @return mean (Mean)
-function M.Student:getmean (quarter)
-    if not self.means then return nil end
+-- @return report (Report)
+function M.Student:getreport (quarter)
+    if not self.reports then return nil end
 
-    for n = 1, #self.means do
-        if self.means[n].quarter == quarter then return self.means[n] end
+    for n = 1, #self.reports do
+        if self.reports[n].quarter == quarter then return self.reports[n] end
     end
 
     return nil -- Non trouvé
@@ -405,14 +405,14 @@ local function readstudent (o)
     end
 
     -- Ajout des moyennes
-    if type(o.means) == "table" then
-        for i = 1, #o.means do
-            local mean
-            if type(o.means[i]) == "table" then
-                if o.means[i].quarter then -- trimestre obligatoire
-                    mean = Mean:new{quarter = o.means[i].quarter,
-                        grades = Grades:new(o.means[i].grades or ""),
-                        score = o.means[i].score or ""}
+    if type(o.reports) == "table" then
+        for i = 1, #o.reports do
+            local report
+            if type(o.reports[i]) == "table" then
+                if o.reports[i].quarter then -- trimestre obligatoire
+                    report = Report:new{quarter = o.reports[i].quarter,
+                        grades = Grades:new(o.reports[i].grades or ""),
+                        score = o.reports[i].score or ""}
                 else
                     io.write(format("Erreur de lecture : moyenne sans trimestre [%s %s %s]\n",
                         student.name, student.lastname, student.class))
@@ -421,7 +421,7 @@ local function readstudent (o)
                 io.write(format("Erreur de lecture : la moyenne doit être une table [%s %s %s]\n",
                     student.name, student.lastname, student.class))
             end
-            student:addmean(mean)
+            student:addreport(report)
         end
     else
         io.write(format("Erreur de lecture : la liste des moyennes doit être une table [%s %s %s]\n",
