@@ -231,18 +231,18 @@ end
 -- Évaluations
 --------------------------------------------------------------------------------
 
-M.EvalResult = {
+M.Eval = {
     -- name = "Évaluation n° 3",
     -- date = "01/01/2001",
     -- quarter = "1",
     -- grades = Grades,
 }
 
-local EvalResult = M.EvalResult
+local Eval = M.Eval
 
 --- Création d’une nouvelle évaluation.
 -- @param o - table contenant les attributs de l’évaluation
-function M.EvalResult:new (o)
+function M.Eval:new (o)
     o = o or {}
     setmetatable(o, self)
     self.__index = self
@@ -252,7 +252,7 @@ end
 
 --- Écriture d’une évaluation dans la base de données.
 -- @param f (file) - fichier ouvert en écriture
-function M.EvalResult:write (f)
+function M.Eval:write (f)
     f:write("\t\t{")
     f:write(format("name = \"%s\", ", self.name or ""))
     f:write(format("date = \"%s\", ", self.date or ""))
@@ -271,7 +271,7 @@ M.Student = {
     -- name = "John",
     -- class = "5e1",
     -- special = "dys, pai, aménagements",
-    -- evaluations = {EvalResult, ...},
+    -- evaluations = {Eval, ...},
     -- reports = {Report, ...}
 }
 
@@ -385,7 +385,7 @@ local function readstudent (o)
             local eval
             if type(o.evaluations[i]) == "table" then
                 if o.evaluations[i].date and o.evaluations[i].quarter then -- date, trimestre obligatoires
-                    eval = EvalResult:new{name = o.evaluations[i].name or "",
+                    eval = Eval:new{name = o.evaluations[i].name or "",
                         date = o.evaluations[i].date,
                         quarter = o.evaluations[i].quarter,
                         grades = Grades:new(o.evaluations[i].grades or "")}
