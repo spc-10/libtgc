@@ -317,6 +317,22 @@ function M.Student:write (f)
 	f:write("}\n")
 end
 
+--- Ajout d’une évaluation à la liste des évaluations de l’élève
+-- @param eval (Eval) - l’évaluation à ajouter
+function M.Student:addeval (eval)
+    self.evaluations = self.evaluations or {}
+
+    table.insert(self.evaluations, eval)
+end
+
+--- Ajout d’une moyenne trimestrielle à la liste des moyennes de l’élève
+-- @param mean (Mean) - la moyenne à ajouter
+function M.Student:addmean (mean)
+    self.means = self.means or {}
+
+    table.insert(self.means, mean)
+end
+
 --- Vérifie si l’élève est dans la classe demandée.
 -- @param class
 function M.Student:isinclass (class)
@@ -365,7 +381,6 @@ local function readstudent (o)
 
     -- Ajout des évals
     if type(o.evaluations) == "table" then
-        student.evaluations = student.evaluations or {}
         for i = 1, #o.evaluations do
             local eval
             if type(o.evaluations[i]) == "table" then
@@ -382,7 +397,7 @@ local function readstudent (o)
                 io.write(format("Erreur de lecture : l’évaluation doit être une table [%s %s %s]\n",
                     student.name, student.lastname, student.class))
             end
-            table.insert(student.evaluations, eval)
+            student:addeval(eval)
         end
     else
         io.write(format("Erreur de lecture : la liste des évaluations doit être une table [%s %s %s]\n",
@@ -391,7 +406,6 @@ local function readstudent (o)
 
     -- Ajout des moyennes
     if type(o.means) == "table" then
-        student.means = student.means or {}
         for i = 1, #o.means do
             local mean
             if type(o.means[i]) == "table" then
@@ -407,7 +421,7 @@ local function readstudent (o)
                 io.write(format("Erreur de lecture : la moyenne doit être une table [%s %s %s]\n",
                     student.name, student.lastname, student.class))
             end
-            table.insert(student.means, mean)
+            student:addmean(mean)
         end
     else
         io.write(format("Erreur de lecture : la liste des moyennes doit être une table [%s %s %s]\n",
