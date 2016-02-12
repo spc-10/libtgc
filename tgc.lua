@@ -323,6 +323,20 @@ function M.Student:isinclass (class)
     return self.class == class
 end
 
+--- Renvoie la moyenne du trimestre demandé
+-- @param quarter (string) - trimestre
+-- @return mean (Mean)
+function M.Student:getmean (quarter)
+    if not self.means then return nil end
+
+    for n = 1, #self.means do
+        if self.means[n].quarter == quarter then return self.means[n] end
+    end
+
+    return nil -- Non trouvé
+
+end
+
 --------------------------------------------------------------------------------
 -- Base de données
 --------------------------------------------------------------------------------
