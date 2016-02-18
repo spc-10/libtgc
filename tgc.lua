@@ -20,6 +20,7 @@ local GRADE_TO_SCORE = {A = 10, B = 7, C = 3, D = 0}
 -- Quelques raccourcis.
 local find, match, format = string.find, string.match, string.format
 local stripaccents = helpers.stripAccents
+table.unique = helpers.unique
 
 local P, S, V, R = lpeg.P, lpeg.S, lpeg.V, lpeg.R
 local C, Cb, Cc, Cg, Cs, Cmt = lpeg.C, lpeg.Cb, lpeg.Cc, lpeg.Cg, lpeg.Cs, lpeg.Cmt
@@ -113,6 +114,8 @@ function Grades:new (s)
     self.__add = self.add
 
     -- convertit la note texte en table
+    -- chaque élément de type 1ABB de la chaîne de caractère initiale est
+    -- converti en élément [1] = "ABB" de la table des notes
     local comp_pattern_s =
         (comp_pattern / function(a,b) o[tonumber(a)] = (o[tonumber(a)] or "") .. string.upper(b) end)^1
     lpeg.match(comp_pattern_s, s)
@@ -120,7 +123,7 @@ function Grades:new (s)
     return o
 end
 
---- Convertion de la note en chaîne de caractère de la "1AA2B3A*C".
+--- Convertion de la note en chaîne de caractère de type "1AA2B3A*C".
 -- @param sep (string) - séparateur à ajouter entre les notes des différentes
 -- compétences
 -- @return (string)
@@ -189,7 +192,15 @@ end
 -- @param b (Grades) - seconde note à additionner
 -- @return (Grades) - somme des deux notes
 function Grades.add (a, b)
-    return Grades:new(a:tostring() .. b:tostring())
+    if a == nil and b == nil then
+        return Grades:new()
+    elseif a == nil then
+        return b
+    elseif b == nil then
+        return a
+    else
+        return Grades:new(a:tostring() .. b:tostring())
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -368,6 +379,7 @@ function Student:write (f)
 end
 
 --- Ajout d’une évaluation à la liste des évaluations de l’élève
+-- TODO Modifier
 -- @param eval (Eval) - l’évaluation à ajouter
 function Student:addeval (eval)
     self.evaluations = self.evaluations or {}
@@ -378,8 +390,6 @@ end
 --- Ajout d’une moyenne trimestrielle à la liste des moyennes de l’élève
 -- @param report (Report) - la moyenne à ajouter
 function Student:addreport (report)
-    self.reports = self.reports or {}
-
     table.insert(self.reports, report)
 end
 
@@ -389,19 +399,53 @@ function Student:isinclass (class)
     return self.class == class
 end
 
---- Renvoie la moyenne du trimestre demandé
+--- Modifie la note moyenne du trimestre demandé
 -- @param quarter (string) - trimestre
--- @return report (Report)
-function Student:getreport (quarter)
-    if not self.reports then return nil end
+-- @param grades (string) - notes (de la forme "1AA2BBC...")
+function Student:setquarter_mean (quarter, grades_string)
+    local report_found = nil
+    local grades = Grades:new(grades_string)
+    grades = grades:getmean()
 
     for n = 1, #self.reports do
-        if self.reports[n].quarter == quarter then return self.reports[n] end
+        if self.reports[n].quarter and self.reports[n].quarter == quarter then
+            report_found = true
+            self.reports[n].grades = grades
+        end
     end
 
-    return nil -- Non trouvé
-
+    -- Le bilan trimestriel n’existe pas encore
+    if not report_found then
+        self:addreport(Report:new{quarter = quarter, grades = grades_string})
+    end
 end
+
+--- Renvoie la note moyenne du trimestre demandé
+-- @param quarter (string) - trimestre
+-- @return q_grades (Grades) - somme de toutes les notes
+function Student:getquarter_mean (quarter)
+    for n = 1, #self.reports do
+        if self.reports[n].quarter and self.reports[n].quarter == quarter then
+            return self.reports[n].grades
+        end
+    end
+    return nil -- Pas trouvé
+end
+
+--- Renvoie la somme de toutes les notes du trimestre demandé
+-- @param quarter (string) - trimestre
+-- @return q_grades (Grades) - somme de toutes les notes
+function Student:getquarter_grades (quarter)
+    local q_grades = Grades:new()
+    for n = 1, #self.evaluations do
+        if self.evaluations[n].quarter and self.evaluations[n].quarter == quarter then
+            q_grades = q_grades + self.evaluations[n].grades
+        end
+    end
+
+    return q_grades
+end
+
 
 --------------------------------------------------------------------------------
 -- Base de données
@@ -430,7 +474,7 @@ function M.Database:read (filename)
     -- TODO tester l'existence du fichier (avec lua filesystem)
 
     function entry (o)
-        assert(self:addstudent(o))
+        self:addstudent(o)
     end
 
     dofile(filename)
@@ -490,27 +534,17 @@ function M.Database:classexists (class)
     return false
 end
 
---- Renvoie la liste des classes correspondant aux motifs.
--- La recherche s’effectue dans la liste des classes des élèves de la base de
--- données
--- @param ... (string) - le ou les motifs de recherche du nom de la classe
+--- Renvoie la liste des classes de la base de données
 -- @return classes (table) - liste des classes correspondant au motif
-function M.Database:getclasses (...)
+function M.Database:getclass_list ()
     local classes = {}
 
-    for _i, pattern in ipairs {...} do
-        if type(pattern) == "string" then
-            if not find(pattern, "^%^") then pattern = "^" .. pattern end
-            if not find(pattern, "%$$") then pattern = pattern .. "$" end
-
-            for n = 1, #self.classes do
-                local class = match(self.classes[n], pattern)
-                if class then table.insert(classes, class) end
-            end
-        end -- TODO else print erreur
+    for n = 1, #self.students do
+        assert(self.students[n].class, "getclass_list () : élève sans classe")
+        table.insert(classes, self.students[n].class)
     end
 
-    return classes
+    return table.unique(classes)
 end
 
 --- Tri de la base de données.
