@@ -35,8 +35,8 @@ local function add_student ()
         else
 			lastname, name = string.match(answer, "^%s*([^,]+)%s*,%s*([^,]+)%s*$")
 			if lastname and name then
-				local student = tgc.Student:new{lastname = lastname, name = name, class = class}
-				database:addstudent(student)
+				-- local student = tgc.Student:new{lastname = lastname, name = name, class = class}
+				database:addstudent{lastname = lastname, name = name, class = class}
                 database_changed = true
 			else
 				io.write("Erreur de syntaxe -> ")

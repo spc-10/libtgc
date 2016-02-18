@@ -11,7 +11,7 @@ package.path = package.path .. ";" .. libdir .. "/?.lua"
 helpers = require("helpers")
 lpeg = require("lpeg")
 
-M = {}
+local M = {}
 
 -- Constantes
 local MAX_COMP = 7 -- Nombre maximal de compétences
@@ -80,16 +80,13 @@ local evals_in_quarter = M.evals_in_quarter
 -- Notes
 --------------------------------------------------------------------------------
 
-M.Grades = {
+local Grades = {
     -- 1 = "ABCDA*",
     -- 2 = "ABCDA*",
     -- 3 = "ABCDA*",
     -- ...
 }
-for n = 1, MAX_COMP do M.Grades[n] = "" end -- Initialisation des compétences
---M.Grades.__add = M.Grades.add
-
-local Grades = M.Grades
+for n = 1, MAX_COMP do Grades[n] = "" end -- Initialisation des compétences
 
 -- Patterns lpeg
 local digit =  R("19")
@@ -108,7 +105,7 @@ local comp_pattern = (not_comp)^0 * C(comp_number) * C(comp_grades) * (not_comp)
 
 --- Création d’une nouvelle note.
 -- @param s (string) - la liste des notes sous la forme "1AA2B3A*C1D.."
-function M.Grades:new (s)
+function Grades:new (s)
     s = s or ""
     local o = {}
     setmetatable(o, self)
@@ -127,7 +124,7 @@ end
 -- @param sep (string) - séparateur à ajouter entre les notes des différentes
 -- compétences
 -- @return (string)
-function M.Grades:tostring (sep)
+function Grades:tostring (sep)
 	sep = sep or ""
     local l = {}
     for n = 1, MAX_COMP do
@@ -139,7 +136,7 @@ end
 
 --- Calcul de la moyenne de la note
 -- @return res (Grades) - moyenne
-function M.Grades:getmean ()
+function Grades:getmean ()
     local estimation = ""
 
     for n = 1, MAX_COMP do
@@ -168,7 +165,7 @@ end
 --- Calcul de la note chiffrée correspondant à la note
 -- @param score_max (number) - la note maximale
 -- @return score (number) - note chiffrée
-function M.Grades:getscore (score_max)
+function Grades:getscore (score_max)
 	score_max = score_max or 20
 	local total_score, grades_nb = 0, 0
 	local mean_grades = self:getmean() -- On ne calcule une note chiffrée que sur une moyenne
@@ -191,7 +188,7 @@ end
 -- @param a (Grades) - première note à additionner
 -- @param b (Grades) - seconde note à additionner
 -- @return (Grades) - somme des deux notes
-function M.Grades.add (a, b)
+function Grades.add (a, b)
     return Grades:new(a:tostring() .. b:tostring())
 end
 
@@ -199,27 +196,33 @@ end
 -- Moyennes du trimestre
 --------------------------------------------------------------------------------
 
-M.Report = {
+local Report = {
     -- quarter = "1",
     -- grades = Grades,
     -- score = "12",
 }
 
-local Report = M.Report
-
---- Création d’une nouvelle moyenne.
--- @param o - table contenant les attributs de la moyenne
-function M.Report:new (o)
-    o = o or {}
-    setmetatable(o, self)
+--- Création d’une nouvelle moyenne trimestrielle.
+-- @param o (table) - table contenant les attributs de la moyenne
+-- @return s (Report) - nouvel objet moyenne
+function Report:new (o)
+    local s = {}
+    setmetatable(s, self)
     self.__index = self
 
-    return o
+    -- Vérification des attributs de la moyenne trimestrielle
+    assert(o.quarter and o.quarter ~= "",
+        "Impossible de créer la moyenne : trimestre obligatoire")
+    s.quarter = o.quarter
+    s.score = o.score or ""
+    s.grades = Grades:new(o.grades or "")
+
+    return s
 end
 
 --- Écriture d’une moyenne dans la base de données.
 -- @param f (file) - fichier ouvert en écriture
-function M.Report:write (f)
+function Report:write (f)
     f:write("\t\t{")
     f:write(format("quarter = \"%s\", ", self.quarter or ""))
     f:write(format("grades = \"%s\", ", self.grades:tostring()))
@@ -231,32 +234,44 @@ end
 -- Évaluations
 --------------------------------------------------------------------------------
 
-M.Eval = {
-    -- name = "Évaluation n° 3",
+local Eval = {
+    -- id = "identifiant",
+    -- title = "Évaluation n° 3",
+    -- number = "3",
     -- date = "01/01/2001",
     -- quarter = "1",
     -- grades = Grades,
 }
 
-local Eval = M.Eval
-
 --- Création d’une nouvelle évaluation.
--- @param o - table contenant les attributs de l’évaluation
-function M.Eval:new (o)
-    o = o or {}
-    setmetatable(o, self)
+-- @param o (table) - table contenant les attributs de l’évaluation
+-- @return s (Eval) - nouvel objet évaluation
+function Eval:new (o)
+    local s = {}
+    setmetatable(s, self)
     self.__index = self
 
-    return o
+    -- Vérification des attributs de l’évaluation
+    assert(o.id and o.id ~= ""
+        and o.date and o.date ~= ""
+        and o.quarter and o.quarter ~= "",
+        "Impossible de créer l’évaluation : identifiant, date et trimestre obligatoires")
+    s.id, s.date, s.quarter = o.id, o.date, o.quarter
+    s.title, s.number = o.title or "", o.number
+    s.grades = Grades:new(o.grades or "")
+
+    return s
 end
 
 --- Écriture d’une évaluation dans la base de données.
 -- @param f (file) - fichier ouvert en écriture
-function M.Eval:write (f)
+function Eval:write (f)
     f:write("\t\t{")
-    f:write(format("name = \"%s\", ", self.name or ""))
-    f:write(format("date = \"%s\", ", self.date or ""))
+    f:write(format("id = \"%s\", ", self.id or ""))
+    f:write(format("title = \"%s\", ", self.title or ""))
+    f:write(format("number = \"%s\", ", self.number or ""))
     f:write(format("quarter = \"%s\", ", self.quarter or ""))
+    f:write(format("date = \"%s\", ", self.date or ""))
     f:write(format("grades = \"%s\", ", self.grades:tostring()))
     f:write("},\n")
 end
@@ -266,30 +281,65 @@ end
 -- Élèves
 --------------------------------------------------------------------------------
 
-M.Student = {
+local Student = {
     -- lastname = "Doe",
     -- name = "John",
     -- class = "5e1",
-    -- special = "dys, pai, aménagements",
-    -- evaluations = {Eval, ...},
-    -- reports = {Report, ...}
+    special = "", -- dys, pai, aménagements...
+    evaluations = {}, -- Eval table
+    reports = {}, -- Report table
 }
 
-local Student = M.Student
-
 --- Création d’un nouvel élève.
--- @param o - table contenant les attributs de l’élève
-function M.Student:new (o)
-    o = o or {}
-    setmetatable(o, self)
+-- @param o (table) - table contenant les attributs de l’élève
+-- @return s (Student) - nouvel objet élève
+function Student:new (o)
+    local s = {}
+    setmetatable(s, self)
     self.__index = self
 
-    return o
+    -- Vérifications des attributs de l’élève
+    assert(o.lastname and o.lastname ~= ""
+        and o.name and o.name ~= ""
+        and o.class and o.class ~= "",
+        "Impossible de créer l’élève : nom, prénom et classe obligatoires")
+    s.lastname, s.name, s.class = o.lastname, o.name, o.class
+    s.special = o.special or ""
+
+    -- Création des évaluations
+    s.evaluations = {}
+    if o.evaluations then
+        assert(type(o.evaluations) == "table",
+            format("Impossible de créer l’élève %s %s : erreur de syntaxe de la table des évaluations",
+                s.lastname, s.name))
+        for n = 1, #o.evaluations do
+            assert(type(o.evaluations[n]) == "table",
+                format("Impossible de créer l’élève %s %s : erreur de syntaxe des évaluations",
+                    s.lastname, s.name))
+            table.insert(s.evaluations, Eval:new(o.evaluations[n]))
+        end
+    end
+
+    -- Création des moyennes trimestrielles
+    s.reports = {}
+    if o.reports then
+        assert(type(o.reports) == "table",
+            format("Impossible de créer l’élève %s %s : erreur de syntaxe de la table des moyennes trimestrielles",
+                s.lastname, s.name))
+        for n = 1, #o.reports do
+            assert(type(o.reports[n]) == "table",
+                format("Impossible de créer l’élève %s %s : erreur de syntaxe des moyennes trimestrielles",
+                    s.lastname, s.name))
+            table.insert(s.reports, Report:new(o.reports[n]))
+        end
+    end
+
+    return s
 end
 
 --- Écriture d’un élève dans la base de données.
 -- @param f (file) - fichier ouvert en écriture
-function M.Student:write (f)
+function Student:write (f)
 	f:write("entry{\n")
 
     f:write(format("\tlastname = \"%s\", name = \"%s\",\n", self.lastname or "", self.name or ""))
@@ -319,7 +369,7 @@ end
 
 --- Ajout d’une évaluation à la liste des évaluations de l’élève
 -- @param eval (Eval) - l’évaluation à ajouter
-function M.Student:addeval (eval)
+function Student:addeval (eval)
     self.evaluations = self.evaluations or {}
 
     table.insert(self.evaluations, eval)
@@ -327,7 +377,7 @@ end
 
 --- Ajout d’une moyenne trimestrielle à la liste des moyennes de l’élève
 -- @param report (Report) - la moyenne à ajouter
-function M.Student:addreport (report)
+function Student:addreport (report)
     self.reports = self.reports or {}
 
     table.insert(self.reports, report)
@@ -335,14 +385,14 @@ end
 
 --- Vérifie si l’élève est dans la classe demandée.
 -- @param class
-function M.Student:isinclass (class)
+function Student:isinclass (class)
     return self.class == class
 end
 
 --- Renvoie la moyenne du trimestre demandé
 -- @param quarter (string) - trimestre
 -- @return report (Report)
-function M.Student:getreport (quarter)
+function Student:getreport (quarter)
     if not self.reports then return nil end
 
     for n = 1, #self.reports do
@@ -362,77 +412,8 @@ M.Database = {
     classes = {}, -- liste des classes
 }
 
-local Database = M.Database
-
---- Lecture d’un élève dans la base de donnée.
--- @param o (table) - entrée dans la base de donnée correspondant à un élève
--- @return student (Student) - objet élève lu
-local function readstudent (o)
-    -- Attributs de l’élève
-    if not (o.lastname and o.name and o.class) then -- Nom, classe obligatoires
-        io.write(format("Erreur de lecture : élève sans nom, prénom ou classe [%s %s %s].\n",
-            o.lastname or "", o.name or "", o.class or ""))
-        return nil -- L’élève ne sera pas ajouté
-    end
-    local student = Student:new{lastname = o.lastname,
-        name = o.name,
-        class = o.class,
-        special = o.special or ""}
-
-    -- Ajout des évals
-    if type(o.evaluations) == "table" then
-        for i = 1, #o.evaluations do
-            local eval
-            if type(o.evaluations[i]) == "table" then
-                if o.evaluations[i].date and o.evaluations[i].quarter then -- date, trimestre obligatoires
-                    eval = Eval:new{name = o.evaluations[i].name or "",
-                        date = o.evaluations[i].date,
-                        quarter = o.evaluations[i].quarter,
-                        grades = Grades:new(o.evaluations[i].grades or "")}
-                else
-                    io.write(format("Erreur de lecture : évaluation sans date ou trimestre [%s %s %s]\n",
-                        student.name, student.lastname, student.class))
-                end
-            else
-                io.write(format("Erreur de lecture : l’évaluation doit être une table [%s %s %s]\n",
-                    student.name, student.lastname, student.class))
-            end
-            student:addeval(eval)
-        end
-    else
-        io.write(format("Erreur de lecture : la liste des évaluations doit être une table [%s %s %s]\n",
-            student.name, student.lastname, student.class))
-    end
-
-    -- Ajout des moyennes
-    if type(o.reports) == "table" then
-        for i = 1, #o.reports do
-            local report
-            if type(o.reports[i]) == "table" then
-                if o.reports[i].quarter then -- trimestre obligatoire
-                    report = Report:new{quarter = o.reports[i].quarter,
-                        grades = Grades:new(o.reports[i].grades or ""),
-                        score = o.reports[i].score or ""}
-                else
-                    io.write(format("Erreur de lecture : moyenne sans trimestre [%s %s %s]\n",
-                        student.name, student.lastname, student.class))
-                end
-            else
-                io.write(format("Erreur de lecture : la moyenne doit être une table [%s %s %s]\n",
-                    student.name, student.lastname, student.class))
-            end
-            student:addreport(report)
-        end
-    else
-        io.write(format("Erreur de lecture : la liste des moyennes doit être une table [%s %s %s]\n",
-            student.name, student.lastname, student.class))
-    end
-
-    return student
-end
-
-
 --- Création d’une nouvelle Database.
+-- @return o (Database) - la nouvelle base de donnée
 function M.Database:new ()
     local o = {}
     setmetatable(o, self)
@@ -443,13 +424,13 @@ end
 --- Lecture de la base de données depuis un fichier.
 -- Chaque entrée du fichier est sous la forme :
 -- entry{...}
+-- et correspond à un élève.
 -- @param filename (string) - le nom du fichier de la base de données
 function M.Database:read (filename)
     -- TODO tester l'existence du fichier (avec lua filesystem)
 
     function entry (o)
-        local student = readstudent(o)
-        self:addstudent(student)
+        assert(self:addstudent(o))
     end
 
     dofile(filename)
@@ -461,6 +442,7 @@ end
 -- @param filename (string) - le nom du fichier de la base de données
 function M.Database:write (filename)
     -- TODO tester l'existence du fichier (avec lua filesystem)
+    -- et renvoyer une erreur ?
     f = assert(io.open(filename, "w"))
 
     for n = 1, #self.students do
@@ -468,14 +450,18 @@ function M.Database:write (filename)
     end
 end
 
+--- DEBUG
+function M.Database:print ()
+
+    for n = 1, #self.students do
+        print(self.students[n].name, self.students[n].lastname, self.students[n].class)
+    end
+end
+
 --- Ajout d’un élève à la base de données.
--- Chaque fois qu’un élève est ajouté à la base de données, on stocke la classe
--- concernée dans une liste
--- @param student (Student) - l’objet élève
-function M.Database:addstudent (student)
-    if not student then return end
-    table.insert(self.students, student)
-    self:addclass(student.class)
+-- @param o (table) - table contenant les attributs de l’élève
+function M.Database:addstudent (o)
+    table.insert(self.students, Student:new(o))
 end
 
 --- Ajout d’une classe à la liste des classes en cours d’utilisation.
