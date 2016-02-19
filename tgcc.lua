@@ -12,13 +12,13 @@ helpers = require("helpers")
 
 local ask = helpers.ask
 
-local find, gsub, format = string.find, string.gsub, string.format
+local find, gsub, format, match = string.find, string.gsub, string.format, string.match
 local lower, upper = string.lower, string.upper
 
 --- Ajout d’un élève à la base de données.
 -- Récupère les informations entrées au clavier par l’utilisateur pour créer un
 -- nouvel élève dans la base de données.
-local function add_student ()
+local function add_student_menu ()
     local class_list = database:getclass_list()
     local class = ask("Quelle est la classe de l’élève ?", nil, class_list)
 
@@ -29,7 +29,6 @@ local function add_student ()
         else
 			lastname, name = string.match(answer, "^%s*([^,]+)%s*,%s*([^,]+)%s*$")
 			if lastname and name then
-				-- local student = tgc.Student:new{lastname = lastname, name = name, class = class}
 				database:addstudent{lastname = lastname, name = name, class = class}
                 database_changed = true
 			else
@@ -43,15 +42,50 @@ end
 -- Récupère les informations entrées au clavier par l’utilisateur pour créer
 -- une nouvelle évaluation pour une classe dans la base de données.
 -- TODO
-local function add_eval ()
-    print("DEBUG : add_eval")
+local function add_eval_menu ()
+    local class = ask("Quelle est la classe de l’élève ?", nil, database:getclass_list())
+    local quarter = ask("Quel est le trimestre ?", nil, {"1", "2", "3"}, true)
+    local id = ask("Quel est l’identifiant de l’évaluation ?")
+    -- On cherche des propositions de titre et numéro dans la liste des évals
+    eval_list = database:geteval_list()
+    number = eval_list[id] and eval_list[id].number or nil
+    title = eval_list[id] and eval_list[id].title or nil
+    local number = ask("Quel est le numéro de l’évaluation ?", number)
+    local title = ask("Quel est le titre de l’évaluation ?", title)
+    local date
+    repeat -- TODO vérifier le format de la date plus précisément ?
+        date = ask("Quel est la date de l’évaluation (format AAAA-MM-JJ) ?") or ""
+    until match(date, "%d%d%d%d%-%d%d%-%d%d")
+
+    -- Parcours des élèves
+    for n =1, #database.students do
+        if database.students[n].class == class then
+            local student = database.students[n]
+            io.write(format("%s %s\n", student.lastname, student.name))
+
+            -- On vérifie si l’éval existe déjà
+            eval = student:geteval(id)
+            local actual_grades = eval and eval.grades or nil
+
+            -- Modification/ajout de la note
+            local grades_s = ask("Notes de l’évaluations ?", actual_grades and actual_grades:tostring() or nil)
+            if actual_grades and actual_grades:tostring() ~= grades_s then -- modification des notes
+                eval:setgrades(grades_s)
+                database_changed = true
+            elseif not actual_grades then -- création de l’éval
+                student:addeval{id = id, number = number, title = title,
+                    quarter = quarter, date = date, grades = grades_s}
+                database_changed = true
+            end
+        end
+    end
 end
 
 --- Ajout d’une moyenne à la base de données.
 -- Récupère les informations entrées au clavier par l’utilisateur pour créer
 -- une nouvelle moyenne des élèves d’une classe dans la base de données.
 -- Plusieurs informations sont calculées et affichées pour aider la saisie.
-local function add_report ()
+local function add_report_menu ()
     local class = ask("Quelle est la classe de l’élève ?", nil, database:getclass_list(), true)
     local quarter = ask("Quel est le trimestre ?", nil, {"1", "2", "3"}, true)
 
@@ -73,13 +107,14 @@ local function add_report ()
                 io.write(format(" - bilan actuel : %s → [%s/20]\n",
                 actual_q_mean:tostring("  "), actual_q_mean:getscore()))
             else
-                io.write(" - Pas encore de moyenne\n")
+                io.write(" - pas encore de moyenne\n")
             end
 
             -- Modification de la moyenne trimestrielle
             local grades_s = ask("Nouvelle moyenne du trimestre :",
                 actual_q_mean and actual_q_mean:tostring() or suggested_q_mean:tostring() or nil)
             if not actual_q_mean or grades_s ~= actual_q_mean:tostring() then -- La note a été changée
+                database_changed = true
                 student:setquarter_mean(quarter, grades_s)
             end
         end
@@ -88,17 +123,13 @@ end
 
 --- Ajout d’une note chiffrée à la base de données.
 -- TODO
-local function add_score ()
-    local class = ask("Quelle est la classe de l’élève ?", nil, database:getclass_list())
-    local quarter = ask("Quel est le trimestre ?", nil, {"1", "2", "3"}, true)
-    for n in students_in_class(database.students, class) do
-        print("DEBUG ", database.students[n].lastname, " ", database.students[n].name)
-    end
+local function add_score_menu ()
+    print("TODO")
 end
 
 --- Sauvegarde de la base de données
 local function save_database ()
-    database_changed = true -- DEBUG
+    --database_changed = true --DEBUG
     if database_changed then
         -- On trie d’abord la base de données
         io.write("Tri de la base de données...")
@@ -130,10 +161,10 @@ end
 -- Entrées du menu principal
 local MAIN_MENU = {
     -- "touche du clavier", "Menu à afficher", fonction à lancer}
-    {title = "Ajouter un élève", f = add_student},
-    {title = "Ajouter une évaluation", f = add_eval},
-    {title = "Ajouter une moyenne", f = add_report},
-    {title = "Ajouter une note chiffrée", f = add_score},
+    {title = "Ajouter un élève", f = add_student_menu},
+    {title = "Ajouter une évaluation", f = add_eval_menu},
+    {title = "Ajouter une moyenne", f = add_report_menu},
+    {title = "Ajouter une note chiffrée", f = add_score_menu},
     {title = "Sauvegarder la base de données", f = save_database},
 }
 

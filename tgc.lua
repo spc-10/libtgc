@@ -20,7 +20,6 @@ local GRADE_TO_SCORE = {A = 10, B = 7, C = 3, D = 0}
 -- Quelques raccourcis.
 local find, match, format = string.find, string.match, string.format
 local stripaccents = helpers.stripAccents
-table.unique = helpers.unique
 
 local P, S, V, R = lpeg.P, lpeg.S, lpeg.V, lpeg.R
 local C, Cb, Cc, Cg, Cs, Cmt = lpeg.C, lpeg.Cb, lpeg.Cc, lpeg.Cg, lpeg.Cs, lpeg.Cmt
@@ -42,9 +41,14 @@ local function sort_students_byclassname (a, b)
 		< stripaccents(b.class) .. stripaccents(b.lastname) .. stripaccents(b.name)
 end
 
---- Fonction de tri des évaluations par date.
+--- Fonction de tri des évals par date.
 local function sort_evals_bydate (a, b)
-	return a.quarter .. a.date < b.quarter .. b.date
+	return a.date < b.date
+end
+
+--- Fonction de tri des moyennes trimestrielles par trimestre
+local function sort_reports_byquarter (a, b)
+	return a.quarter < b.quarter
 end
 
 --- Itérateur des élèves d’une classe
@@ -287,6 +291,13 @@ function Eval:write (f)
     f:write("},\n")
 end
 
+--- Change ou ajoute les notes d’une évaluation
+-- @param grades_s (string) - notes à ajouter
+function Eval:setgrades (grades_s)
+    local grades = Grades:new(grades_s)
+    self.grades = grades
+end
+
 
 --------------------------------------------------------------------------------
 -- Élèves
@@ -378,19 +389,29 @@ function Student:write (f)
 	f:write("}\n")
 end
 
---- Ajout d’une évaluation à la liste des évaluations de l’élève
--- TODO Modifier
--- @param eval (Eval) - l’évaluation à ajouter
-function Student:addeval (eval)
-    self.evaluations = self.evaluations or {}
+--- Ajout d’une évaluation d’un élève
+-- @param o (table) - les paramètres de l’évaluation
+function Student:addeval (o)
+    table.insert(self.evaluations, Eval:new(o))
+end
 
-    table.insert(self.evaluations, eval)
+--- Récupère l’évaluation ayant l’identifiant donné
+-- @param id (string) - identifiant de l’évaluation a récupérer
+-- @return eval (Eval) - l’évaluation trouvée
+function Student:geteval (id)
+    local eval = nil
+    for n = 1, #self.evaluations do
+        if self.evaluations[n].id and self.evaluations[n].id == id then
+            eval = self.evaluations[n]
+        end
+    end
+    return eval
 end
 
 --- Ajout d’une moyenne trimestrielle à la liste des moyennes de l’élève
--- @param report (Report) - la moyenne à ajouter
-function Student:addreport (report)
-    table.insert(self.reports, report)
+-- @param o (table) - les paramètres de la moyenne trimestrielle à ajouter
+function Student:addreport (o)
+    table.insert(self.reports, Report:new(o))
 end
 
 --- Vérifie si l’élève est dans la classe demandée.
@@ -405,7 +426,7 @@ end
 function Student:setquarter_mean (quarter, grades_string)
     local report_found = nil
     local grades = Grades:new(grades_string)
-    grades = grades:getmean()
+    grades = grades:getmean() -- la moyenne trimestrielle doit être une moyenne !
 
     for n = 1, #self.reports do
         if self.reports[n].quarter and self.reports[n].quarter == quarter then
@@ -416,7 +437,7 @@ function Student:setquarter_mean (quarter, grades_string)
 
     -- Le bilan trimestriel n’existe pas encore
     if not report_found then
-        self:addreport(Report:new{quarter = quarter, grades = grades_string})
+        self:addreport{quarter = quarter, grades = grades:tostring()}
     end
 end
 
@@ -446,6 +467,19 @@ function Student:getquarter_grades (quarter)
     return q_grades
 end
 
+--- DEBUG
+-- TODO : à terminer
+function Student:print ()
+    print("Nom : ", self.lastname, "Prénom : ", self.name)
+    print("Classe : ", self.class)
+    print("Spécial : ", self.special)
+   --  for n = 1, #self.evaluations do
+   --      self.evaluations[n]:print()
+   --  end
+   --  for n = 1, #self.reports do
+   --      self.reports[n]:print()
+   --  end
+end
 
 --------------------------------------------------------------------------------
 -- Base de données
@@ -478,8 +512,6 @@ function M.Database:read (filename)
     end
 
     dofile(filename)
-
-    print("Database : " .. #self.students .. " élèves lus.") -- DEBUG
 end
 
 --- Écriture de la base de données vers un fichier.
@@ -492,13 +524,15 @@ function M.Database:write (filename)
     for n = 1, #self.students do
         self.students[n]:write(f)
     end
+    f:flush()
 end
 
 --- DEBUG
+-- TODO : à terminer
 function M.Database:print ()
 
     for n = 1, #self.students do
-        print(self.students[n].name, self.students[n].lastname, self.students[n].class)
+        self.students[n]:print()
     end
 end
 
@@ -535,23 +569,50 @@ function M.Database:classexists (class)
 end
 
 --- Renvoie la liste des classes de la base de données
--- @return classes (table) - liste des classes correspondant au motif
+-- @return classes (table) - liste des classes
 function M.Database:getclass_list ()
     local classes = {}
+    local hash = {}
 
     for n = 1, #self.students do
-        assert(self.students[n].class, "getclass_list () : élève sans classe")
-        table.insert(classes, self.students[n].class)
+        local class = self.students[n].class
+        if not hash[class] then
+            table.insert(classes, class)
+            hash[class] = true
+        end
     end
 
-    return table.unique(classes)
+    return classes
+end
+
+--- Renvoie la liste des évaluation de la base de données
+-- @return evals (table) - liste des évaluations
+function M.Database:geteval_list ()
+    local evals = {}
+
+    for n = 1, #self.students do
+        assert(self.students[n].evaluations, "geteval_list () : élève sans liste d’évaluations")
+        for k = 1, #self.students[n].evaluations do
+            local eval = self.students[n].evaluations[k]
+            assert(eval.id, "geteval_list () : évaluation sans identifiant")
+            local id = eval.id
+            if not evals[id] then
+                evals[id] = {number = eval.number, title = eval.title, quarter = eval.quarter}
+            end
+        end
+    end
+
+    return evals
 end
 
 --- Tri de la base de données.
 function M.Database:sort ()
 	table.sort(self.students, sort_students_byclassname)
 
-	-- TODO tri des évals et des moyennes
+    for n = 1, #self.students do
+        table.sort(self.students[n].evaluations, sort_evals_bydate)
+        table.sort(self.students[n].reports, sort_reports_byquarter)
+    end
 end
 
 return M
