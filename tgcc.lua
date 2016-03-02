@@ -56,6 +56,8 @@ local function add_eval_menu ()
     repeat -- TODO vérifier le format de la date plus précisément ?
         date = ask("Quel est la date de l’évaluation (format AAAA-MM-JJ) ?") or ""
     until match(date, "%d%d%d%d%-%d%d%-%d%d")
+    -- TODO vérifier le format ?
+    local mask = ask("Compétences évaluées (laisser vide pour entrer les notes complètes) ?")
 
     -- Parcours des élèves
     for n =1, #database.students do
@@ -65,16 +67,26 @@ local function add_eval_menu ()
 
             -- On vérifie si l’éval existe déjà
             eval = student:geteval(id)
-            local actual_grades = eval and eval.grades or nil
+            local actual_grades = eval and eval.grades
 
             -- Modification/ajout de la note
-            local grades_s = ask("Notes de l’évaluations ?", actual_grades and actual_grades:tostring() or nil)
-            if actual_grades and actual_grades:tostring() ~= grades_s then -- modification des notes
-                eval:setgrades(grades_s)
-                database_changed = true
-            elseif not actual_grades then -- création de l’éval
-                student:addeval{id = id, number = number, title = title,
-                    quarter = quarter, date = date, grades = grades_s}
+            local question = "Notes de l’évaluations"
+            if mask ~= "" then question = question .. " (" .. mask .. ") ?"
+            else question = question .. " ?"
+            end
+            local grades_s = ask(question, actual_grades and actual_grades:tostring() or nil)
+            -- TODO Gestion d’un masque
+            if grades_s ~= "" then -- la note a été modifiée
+                -- Application du masque
+                if mask ~= "" then grades_s = tgc.grades_unmask(grades_s, mask) end
+
+                if eval then -- l’éval existe déjà
+                   eval:setgrades(grades_s)
+                else -- création de l’éval
+                    student:addeval{id = id, number = number, title = title,
+                        quarter = quarter, date = date, grades = grades_s}
+                end
+                io.write(format("DEBUG - Nouvelle note : %s\n", grades_s))
                 database_changed = true
             end
         end
