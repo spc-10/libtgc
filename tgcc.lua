@@ -15,6 +15,37 @@ local ask = helpers.ask
 local find, gsub, format, match = string.find, string.gsub, string.format, string.match
 local lower, upper = string.lower, string.upper
 
+-- Code couleur du terminal
+local term_color = {black = 0, red = 1, green = 2, yellow = 3, blue = 4,
+    magenta = 5, cyan = 6, white = 7}
+
+--- Ajoute les caractères d’échappement nécessaires à la colorisation d’une
+-- chaîne de caractère.
+-- @param s (string) - chaîne à coloriser
+-- @return (string) - chaîne avec échappement adaptés à la couleur souhaitée
+local function color (s, foreground, background, bold)
+    local fg = term_color[foreground] or 9
+    local bg = term_color[background] or 9
+    if bold then bold = ";1" else bold = "" end
+
+    -- https://en.wikipedia.org/wiki/ANSI_escape_code
+    return "\027[" .. 30 + fg .. ";" .. 40 + bg .. bold .. "m" .. s .. "\027[0m"
+end
+
+--- Colore les notes (A en vert, B aussi, C en jaune et D en rouge).
+-- @param s (string) - notes à coloriser
+-- @return s (string) - les notes avec échappements pour les couleurs
+local function grades_color (s)
+    s = s or ""
+
+    s = gsub(s, "A", color("A", "green"))
+    s = gsub(s, "B", color("B", "green"))
+    s = gsub(s, "C", color("C", "yellow"))
+    s = gsub(s, "D", color("D", "red"))
+
+    return s
+end
+
 --- Ajout d’un élève à la base de données.
 -- Récupère les informations entrées au clavier par l’utilisateur pour créer un
 -- nouvel élève dans la base de données.
@@ -112,12 +143,12 @@ local function add_report_menu ()
             local suggested_q_mean = quarter_grades:getmean() -- Moyenne suggérée
 
             io.write(format("%s %s\n", student.lastname, student.name))
-            io.write(format(" - toutes les notes du trimestre : %s\n", quarter_grades:tostring("  ")))
+            io.write(format(" - toutes les notes du trimestre : %s\n", grades_color(quarter_grades:tostring("  "))))
             io.write(format(" - bilan calculé : %s → [%s/20]\n",
-                suggested_q_mean:tostring("  "), suggested_q_mean:getscore()))
+                grades_color(suggested_q_mean:tostring("  ")), suggested_q_mean:getscore()))
             if actual_q_mean then
                 io.write(format(" - bilan actuel : %s → [%s/20]\n",
-                actual_q_mean:tostring("  "), actual_q_mean:getscore()))
+                grades_color(actual_q_mean:tostring("  ")), actual_q_mean:getscore()))
             else
                 io.write(" - pas encore de moyenne\n")
             end
