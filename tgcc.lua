@@ -179,9 +179,15 @@ local function save_database ()
         database:sort()
         io.write(" OK\n")
 
-        database:write(svg_filename)
-        database_changed = false
-        io.write(format("Base de données sauvegardée dans : %s\n", svg_filename))
+        --local tmpfilename = filename .. "~"
+        local tmpfilename = filename .. os.time() -- DEBUG
+        if (os.rename(filename, tmpfilename)) then
+            database:write(filename)
+            database_changed = false
+            io.write(format("Base de données sauvegardée dans : %s\n", filename))
+        else
+            io.write(format("Impossible d’écrire dans : %s\n", filename .. "~"))
+        end
     else
         io.write("Aucun changement depuis la dernière sauvegarde.\n")
     end
@@ -192,7 +198,8 @@ end
 local function quit ()
     -- Sauvegarde de la base de données si elle a été modifiée
     if database_changed then
-        answer = ask("La base de données a été modifiée. Voulez-vous l’enregistrer ?", "o", {"o", "n"}, true)
+        answer = ask("La base de données a été modifiée. Voulez-vous l’enregistrer ?",
+            "o", {"o", "n"}, true)
         if answer == "o" then
             save_database()
         end
@@ -244,9 +251,9 @@ end
 
 --- Fonction principale.
 local function main ()
-    local filename = arg[1]
+    filename = arg[1]
+    -- TODO utiliser un message d'erreur avec 'usage()'
     assert(filename, "Aucun fichier spécifié")
-    svg_filename = filename .. os.time()
 
     database = tgc.Database:new()
     database:read(filename)
