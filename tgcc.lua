@@ -8,12 +8,52 @@ package.path = package.path .. ";" .. libdir .. "/?"
 package.path = package.path .. ";" .. libdir .. "/?.lua"
 
 tgc = require("tgc")
-helpers = require("helpers")
-
-local ask = helpers.ask
 
 local find, gsub, format, match = string.find, string.gsub, string.format, string.match
 local lower, upper = string.lower, string.upper
+
+--- Pose une question et lit la réponse sur l’entrée standard.
+-- Une réponse par défaut et une liste de choix possibles peuvent être
+-- ajoutées.
+-- License : GPLv2, Hans Hagen, PRAGMA-ADE, Hasselt NL, in ConTeXt (l-io.lua)
+-- @param question (string) - teste de la question à poser
+-- @param default (string) - réponse par défaut
+-- @param options (table) - liste de réponses possibles
+-- @param force (bool) - si vrai, la réponse doit obligatoirement se
+--  trouver parmi les options
+local function ask (question, default, options, force)
+    force = not not force -- conversion en booléen
+
+    while true do
+        io.write(question)
+        if options then
+            io.write(format(" [%s]", table.concat(options, "|")))
+        end
+        if default then
+            io.write(format(" [%s]", default))
+        end
+        io.write(format(" "))
+        io.flush()
+        local answer = io.read()
+        -- CTRL-D
+        if not answer then
+            io.write("\n")
+            return nil
+        end
+        answer = gsub(answer, "^%s*(.*)%s*$", "%1")
+        if answer == "" and default then
+            return default
+        elseif options and force then
+            for k = 1, #options do
+                if lower(options[k]) == lower(answer) then
+                    return options[k] -- on retourne la version proposée en option
+                end
+            end
+        elseif answer ~= "" or not force then
+            return answer
+        end
+    end
+end
 
 -- Code couleur du terminal
 local term_color = {black = 0, red = 1, green = 2, yellow = 3, blue = 4,
@@ -52,11 +92,12 @@ end
 local function add_student_menu ()
     local class_list = database:getclass_list()
     local class = ask("Quelle est la classe de l’élève ?", nil, class_list)
+    if not class or class == "" then return end
 
     io.write("Entrez un élève par ligne (CTRL-D ou vide pour arrêter)\n")
     while true do
         local answer = ask("Nom, Prénom :")
-        if answer == "" then return
+        if not answer or answer == "" then return
         else
 			lastname, name = string.match(answer, "^%s*([^,]+)%s*,%s*([^,]+)%s*$")
 			if lastname and name then
@@ -75,14 +116,19 @@ end
 -- TODO
 local function add_eval_menu ()
     local class = ask("Quelle est la classe de l’élève ?", nil, database:getclass_list())
+    if not class or class == "" then return end
     local quarter = ask("Quel est le trimestre ?", nil, {"1", "2", "3"}, true)
-    local id = ask("Quel est l’identifiant de l’évaluation ?")
+    if not quarter then return end
+    local id = ask("Quel est l’identifiant de l’évaluation ?", nil, nil, true)
+    if not id then return end
     -- On cherche des propositions de titre et numéro dans la liste des évals
     eval_list = database:geteval_list()
     number = eval_list[id] and eval_list[id].number or nil
     title = eval_list[id] and eval_list[id].title or nil
     local number = ask("Quel est le numéro de l’évaluation ?", number)
-    local title = ask("Quel est le titre de l’évaluation ?", title)
+    if not number then return end
+    local title = ask("Quel est le titre de l’évaluation ?", title, nil, true)
+    if not title then return end
     local date
     repeat -- TODO vérifier le format de la date plus précisément ?
         date = ask("Quel est la date de l’évaluation (format AAAA-MM-JJ) ?") or ""
@@ -102,14 +148,14 @@ local function add_eval_menu ()
 
             -- Modification/ajout de la note
             local question = "Notes de l’évaluations"
-            if mask ~= "" then question = question .. " (" .. mask .. ") ?"
+            if mask and mask ~= "" then question = question .. " (" .. mask .. ") ?"
             else question = question .. " ?"
             end
             local grades_s = ask(question, actual_grades and actual_grades:tostring() or nil)
             -- TODO Gestion d’un masque
-            if grades_s ~= "" then -- la note a été modifiée
+            if grades_s and grades_s ~= "" then -- la note a été modifiée
                 -- Application du masque
-                if mask ~= "" then grades_s = tgc.grades_unmask(grades_s, mask) end
+                if mask and mask ~= "" then grades_s = tgc.grades_unmask(grades_s, mask) end
 
                 if eval then -- l’éval existe déjà
                    eval:setgrades(grades_s)
@@ -130,7 +176,9 @@ end
 -- Plusieurs informations sont calculées et affichées pour aider la saisie.
 local function add_report_menu ()
     local class = ask("Quelle est la classe de l’élève ?", nil, database:getclass_list(), true)
+    if not class or class == "" then return end
     local quarter = ask("Quel est le trimestre ?", nil, {"1", "2", "3"}, true)
+    if not quarter then return end
 
     -- Parcours des élèves
     for n =1, #database.students do
@@ -156,7 +204,7 @@ local function add_report_menu ()
             -- Modification de la moyenne trimestrielle
             local grades_s = ask("Nouvelle moyenne du trimestre :",
                 actual_q_mean and actual_q_mean:tostring() or suggested_q_mean:tostring() or nil)
-            if not actual_q_mean or grades_s ~= actual_q_mean:tostring() then -- La note a été changée
+            if grades_s and grades_s ~= "" then -- La note a été changée
                 database_changed = true
                 student:setquarter_mean(quarter, grades_s)
             end
