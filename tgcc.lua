@@ -62,11 +62,14 @@ local term_color = {black = 0, red = 1, green = 2, yellow = 3, blue = 4,
 --- Ajoute les caractères d’échappement nécessaires à la colorisation d’une
 -- chaîne de caractère.
 -- @param s (string) - chaîne à coloriser
+-- @param foreground (string) - couleur d'avant-plan
+-- @param background (string) - couleur d'arrière-plan
 -- @return (string) - chaîne avec échappement adaptés à la couleur souhaitée
-local function color (s, foreground, background, bold)
+local function color (s, foreground, background, special)
+    local bold = ""
     local fg = term_color[foreground] or 9
     local bg = term_color[background] or 9
-    if bold then bold = ";1" else bold = "" end
+    if special == "bold" then bold = ";1" end
 
     -- https://en.wikipedia.org/wiki/ANSI_escape_code
     return "\027[" .. 30 + fg .. ";" .. 40 + bg .. bold .. "m" .. s .. "\027[0m"
@@ -77,12 +80,10 @@ end
 -- @return s (string) - les notes avec échappements pour les couleurs
 local function grades_color (s)
     s = s or ""
-
     s = gsub(s, "A", color("A", "green"))
     s = gsub(s, "B", color("B", "green"))
     s = gsub(s, "C", color("C", "yellow"))
     s = gsub(s, "D", color("D", "red"))
-
     return s
 end
 
