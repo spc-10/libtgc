@@ -191,7 +191,7 @@ local function add_report_menu ()
             local quarter_grades = student:getquarter_grades(quarter) -- Toutes les notes du trimestre
             local suggested_q_mean = quarter_grades:getmean() -- Moyenne suggérée
 
-            io.write(format("%s %s\n", student.lastname, student.name))
+            io.write(color(format("%s %s\n", student.lastname, student.name), nil, nil, "bold"))
             io.write(format(" - toutes les notes du trimestre : %s\n", grades_color(quarter_grades:tostring("  "))))
             io.write(format(" - bilan calculé : %s → [%s/20]\n",
                 grades_color(suggested_q_mean:tostring("  ")), suggested_q_mean:getscore()))
@@ -208,6 +208,34 @@ local function add_report_menu ()
             if grades_s and grades_s ~= "" then -- La note a été changée
                 database_changed = true
                 student:setquarter_mean(quarter, grades_s)
+            end
+        end
+    end
+end
+
+--- Affichage des moyennes trimestrielles d’une classe.
+local function print_report_menu ()
+    local class = ask("Quelle est la classe de l’élève ?", nil, database:getclass_list(), true)
+    if not class or class == "" then return end
+    local quarter = ask("Quel est le trimestre ?", nil, {"1", "2", "3"}, true)
+    if not quarter then return end
+
+    -- Parcours des élèves
+    for n =1, #database.students do
+        if database.students[n].class == class then
+            local student = database.students[n]
+
+            -- Affichage des infos nécessaires pour déterminer la moyenne de l’élève
+            local actual_q_mean = student:getquarter_mean(quarter) -- Moyenne actuelle
+            local quarter_grades = student:getquarter_grades(quarter) -- Toutes les notes du trimestre
+
+            io.write(color(format("%s %s\n", student.lastname, student.name), nil, nil, "bold"))
+            io.write(format(" - toutes les notes du trimestre : %s\n", grades_color(quarter_grades:tostring("  "))))
+            if actual_q_mean then
+                io.write(format(" - bilan actuel : %s → [%s/20]\n",
+                grades_color(actual_q_mean:tostring("  ")), actual_q_mean:getscore()))
+            else
+                io.write(" - pas encore de moyenne\n")
             end
         end
     end
@@ -264,6 +292,7 @@ local MAIN_MENU = {
     {title = "Ajouter une évaluation", f = add_eval_menu},
     {title = "Ajouter une moyenne", f = add_report_menu},
     {title = "Ajouter une note chiffrée", f = add_score_menu},
+    {title = "Afficher les moyennes", f = print_report_menu},
     {title = "Sauvegarder la base de données", f = save_database},
 }
 
