@@ -141,7 +141,7 @@ local function add_eval_menu ()
     for n =1, #database.students do
         if database.students[n].class == class then
             local student = database.students[n]
-            io.write(format("%s %s\n", student.lastname, student.name))
+            io.write(color(format("%s %s\n", student.lastname, student.name), nil, nil, "bold"))
 
             -- On vérifie si l’éval existe déjà
             eval = student:geteval(id)
@@ -166,6 +166,36 @@ local function add_eval_menu ()
                 end
                 io.write(format("DEBUG - Nouvelle note : %s\n", grades_s))
                 database_changed = true
+            end
+        end
+    end
+end
+
+--- Affichage des évaluations des élèves.
+-- Si aucun trimestre n'est demandé, affiche les évals des trois trimestres. Si
+-- aucun identifiant n'est donné, affiche toutes les évals du trimestre.
+local function print_eval_menu ()
+    local class = ask("Quelle est la classe de l’élève ?", nil, database:getclass_list())
+    if not class or class == "" then return end
+    local quarter = ask("Quel est le trimestre (laisser vide pour tout afficher) ?", nil, {"1", "2", "3"})
+    if not quarter then quarter = "" end
+    -- TODO : modifier geteval_list pour récupérer les id des évals de la classe et du trimestre.
+    local id = ask("Quel est l’identifiant de l’évaluation (laisser vide pour tout afficher) ?")
+    if not id then id = "" end
+
+    -- Parcours des élèves
+    for n = 1, #database.students do
+        if database.students[n].class == class then
+            local student = database.students[n]
+            io.write(color(format("%s %s\n", student.lastname, student.name), nil, nil, "bold"))
+
+            if not student.evaluations then return nil end
+            for m = 1, #student.evaluations do
+                local eval = student.evaluations[m]
+                if (quarter == "" or eval.quarter == quarter) and (id == "" or eval.id == id) then
+                    io.write(format("%s. %s : %s\n",
+                        eval.number or "", eval.title or "", grades_color(eval.grades:tostring(" "))))
+                end
             end
         end
     end
@@ -292,6 +322,7 @@ local MAIN_MENU = {
     {title = "Ajouter une évaluation", f = add_eval_menu},
     {title = "Ajouter une moyenne", f = add_report_menu},
     {title = "Ajouter une note chiffrée", f = add_score_menu},
+    {title = "Afficher les évaluations", f = print_eval_menu},
     {title = "Afficher les moyennes", f = print_report_menu},
     {title = "Sauvegarder la base de données", f = save_database},
 }

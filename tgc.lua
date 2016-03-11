@@ -632,6 +632,7 @@ end
 
 --- Renvoie la liste des évaluation de la base de données
 -- @return evals (table) - liste des évaluations
+-- TODO paramètres class et quarter pour se limiter aux evals correspondantes
 function M.Database:geteval_list ()
     local evals = {}
 
