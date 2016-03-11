@@ -259,14 +259,14 @@ local function print_report_menu ()
             local actual_q_mean = student:getquarter_mean(quarter) -- Moyenne actuelle
             local quarter_grades = student:getquarter_grades(quarter) -- Toutes les notes du trimestre
 
-            io.write(color(format("%s %s\n", student.lastname, student.name), nil, nil, "bold"))
-            io.write(format(" - toutes les notes du trimestre : %s\n", grades_color(quarter_grades:tostring("  "))))
+            io.write(color(format("%s %s :", student.lastname, student.name), nil, nil, "bold"))
             if actual_q_mean then
-                io.write(format(" - bilan actuel : %s → [%s/20]\n",
-                grades_color(actual_q_mean:tostring("  ")), actual_q_mean:getscore()))
+                io.write(format(" %s → [%s/20]\n",
+                grades_color(actual_q_mean:tostring("  ")), color(actual_q_mean:getscore(), nil, nil, "bold")))
             else
-                io.write(" - pas encore de moyenne\n")
+                io.write(" pas encore de moyenne\n")
             end
+            io.write(format(" - notes du trimestre : %s\n", grades_color(quarter_grades:tostring("  "))))
         end
     end
 end
