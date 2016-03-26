@@ -3,10 +3,6 @@
 -- TODO : Programmation du menu en OO et en module, voir :
 -- http://lua-users.org/wiki/AsciiMenu
 
-local libdir = os.getenv("HOME") .. "/lib/lua"
-package.path = package.path .. ";" .. libdir .. "/?"
-package.path = package.path .. ";" .. libdir .. "/?.lua"
-
 tgc = require("tgc")
 
 local find, gsub, format, match = string.find, string.gsub, string.format, string.match
