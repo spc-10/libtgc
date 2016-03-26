@@ -133,6 +133,17 @@ function Grades:new (s)
     return o
 end
 
+--- Gets the grades of the specified competence
+-- @param comp (number) - the competence number!
+-- @return (string)
+function Grades:getcomp_grades (comp)
+    if type(comp) == "number" and comp > 0 and comp <= MAX_COMP then
+        return self[comp]
+    else
+        return nil
+    end
+end
+
 --- Convertion de la note en chaîne de caractère de type "1AA2B3A*C".
 -- @param sep (string) - séparateur à ajouter entre les notes des différentes
 -- compétences
