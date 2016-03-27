@@ -1,4 +1,4 @@
---[[This module provides functions to handle evaluations by competences.
+--[[This module provides the Competences Class for TGC.
 
     Copyright (C) 2016 by Romain Diss
 
@@ -16,26 +16,11 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 ]]--
 
-helpers = require("helpers")
-lpeg = require("lpeg")
-
-local M = {}
-
--- Constantes
-local MAX_COMP = 7 -- Nombre maximal de compétences
-local GRADE_TO_SCORE = {A = 10, B = 7, C = 3, D = 0}
-
--- Quelques raccourcis.
-local find, match, format, gsub = string.find, string.match, string.format, string.gsub
-local stripaccents = helpers.stripAccents
-
-local P, S, V, R = lpeg.P, lpeg.S, lpeg.V, lpeg.R
-local C, Cb, Cc, Cg, Cs, Ct, Cmt = lpeg.C, lpeg.Cb, lpeg.Cc, lpeg.Cg, lpeg.Cs, lpeg.Ct, lpeg.Cmt
-
+local _M = {}
 
 
 --------------------------------------------------------------------------------
--- Helpers
+-- Round a number !
 --------------------------------------------------------------------------------
 local function round (num)
 	if num >= 0 then return math.floor(num+.5)
@@ -43,183 +28,192 @@ local function round (num)
 end
 
 --------------------------------------------------------------------------------
--- Notes
+-- Gets the score corresponding to grade
+--
+-- @param grade (string)
 --------------------------------------------------------------------------------
+local function grade_to_score (grade)
+	if grade == "A" then return "10"
+    elseif grade == "B" then return "7"
+    elseif grade == "C" then return "3"
+    elseif grade == "D" then return "0"
+	else return "0" end -- Should be nil?
+end
 
-local Grades = {
-    -- 1 = "ABCDA*",
-    -- 2 = "ABCDA*",
-    -- 3 = "ABCDA*",
-    -- ...
-}
-for n = 1, MAX_COMP do Grades[n] = "" end -- Initialisation des compétences
-local Grades_mt = {__index = Grades, __add = Grades.add}
+--------------------------------------------------------------------------------
+-- Return a list of competences made from a grades list and a competence numbers
+-- list (the mask).
+--
+-- TODO Better do with examples.
+--
+-- @param s (string) - grades list.
+-- @param mask (string) - competence numbers list.
+-- @return competences (string) - the list of competences.
+--------------------------------------------------------------------------------
+local function unmask_competences (s, mask)
+    local competences = ""
+    local comp_t, grade_t = {}, {}
 
--- Patterns lpeg
-local digit =  R("19")
-local lower_grade_letter = S("abcd")
-local upper_grade_letter = S("ABCD")
-local grade_letter = upper_grade_letter + lower_grade_letter
-local star = P("*")
-local starsomewhere = (1 - star)^0 * star
-local sep = S(" -/") -- séparateur pour préciser l’absence d’une note (avec masque)
-local grade = grade_letter * star^0
-local cgradeorsep = C(grade + sep)
-local cgradewostar = C(grade_letter) * star^0
+    for comp in string.gmatch(mask, "%d+%*?") do
+        comp_t[#comp_t + 1] = comp
+    end
+    for grade in string.gmatch(s, "[ABCDabcd]%*?") do
+        grade_t[#grade_t + 1] = grade
+    end
 
-local comp_grades = grade^1
-local comp_number = digit -- 9 compétences max pour le moment
-local comp_number_mask = comp_number * star^0
-local not_comp = 1 - comp_number * comp_grades
+    local m = 1
+    for n = 1, #comp_t do
+        if not grade_t[m] then break end
+        local comp_number = string.match(comp_t[n], "%d+")
+        -- ignore stared competences when no stared grade is given
+        if string.match(comp_t[n], "%*")  and string.match(grade_t[m], "%*") then
+                competences = competences .. comp_number .. grade_t[m]
+            m = m + 1
+        elseif not string.match(comp_t[n], "%*") then
+            competences = competences .. comp_number .. grade_t[m]
+            m = m + 1
+        end
+    end
 
-local comp_pattern = (not_comp)^0 * C(comp_number) * C(comp_grades) * (not_comp)^0
+    return competences
+end
 
 
---- Création d’une nouvelle note.
--- TODO meilleure doc
--- @param s (string) - la liste des notes sous la forme "1AA2B3A*C1D.."
-function M.new (s)
+--------------------------------------------------------------------------------
+-- THE COMPETENCE CLASS
+--
+-- It contains the grades of each number competences
+--------------------------------------------------------------------------------
+local Competences = {}
+local Competences_mt = {
+    __metatable = {},
+    __index = Competences,
+    __add = Competences.add}
+
+
+--------------------------------------------------------------------------------
+-- Creates new Competences
+--
+-- @param s (string) - a list of competences (a number) each one followed by
+--                     grades (A, B, C or D). If the mask is given. this string
+--                     only contains the list of grades corresponding to the
+--                     competence numbers in the mask.
+-- @param mask (string) - [optional] a list of competence numbers.
+--------------------------------------------------------------------------------
+function _M.new (s, mask)
     s = s or ""
-    local o = setmetatable({}, Grades_mt)
+    if mask then
+        s = unmask_competences(s, mask)
+    end
+    local o = setmetatable({}, Competences_mt)
 
-    -- convertit la note texte en table
-    -- chaque élément de type 1ABB de la chaîne de caractère initiale est
-    -- converti en élément [1] = "ABB" de la table des notes
-    local comp_pattern_s =
-        (comp_pattern / function(a,b) o[tonumber(a)] = (o[tonumber(a)] or "") .. string.upper(b) end)^1
-    lpeg.match(comp_pattern_s, s)
+    -- convert the competences string into a table
+    for comp, grades in string.gmatch(s, "(%d+)([ABCDabcd%*]+)") do
+        for grade in string.gmatch(grades, "[ABCDabcd]%*?") do
+            o[comp] = (o[comp] or "") .. string.upper(grade)
+        end
+    end
 
     return o
 end
 
---- Gets the grades of the specified competence
+--------------------------------------------------------------------------------
+-- Gets the grades of the specified competence.
+--
 -- @param comp (number) - the competence number!
--- @return (string)
-function Grades:getcomp_grades (comp)
-    if type(comp) == "number" and comp > 0 and comp <= MAX_COMP then
-        return self[comp]
-    else
-        return nil
-    end
+-- @return (string) - the corresponding grades.
+--------------------------------------------------------------------------------
+function Competences:getcomp_grades (comp)
+    return self[comp]
 end
 
---- Convertion de la note en chaîne de caractère de type "1AA2B3A*C".
--- @param sep (string) - séparateur à ajouter entre les notes des différentes
--- compétences
--- @return (string)
-function Grades:tostring (sep)
+--------------------------------------------------------------------------------
+-- Converts the competences table into a string.
+
+-- @param sep (string) - [optional] separator to insert between each competence
+--                       grades.
+-- @return (string) - the competences string!
+--------------------------------------------------------------------------------
+function Competences:tostring (sep)
 	sep = sep or ""
-    local l = {}
-    for n = 1, MAX_COMP do
-        if self[n] ~= "" then l[#l + 1] = tostring(n) .. tostring(self[n]) end
+    local l, a = {}, {}
+
+    -- sort the competence numbers
+    for comp in pairs(self) do a[#a + 1] = comp end
+    table.sort(a)
+
+    for _, comp in ipairs(a) do
+        l[#l + 1] = comp .. self[comp]
     end
 
     return table.concat(l, sep) or ""
 end
 
---- Calcul de la moyenne de la note
--- @return res (Grades) - moyenne
-function Grades:getmean ()
+--------------------------------------------------------------------------------
+-- Means the grades of the competences.
+--
+-- @return res (Competences) - moyenne
+--------------------------------------------------------------------------------
+function Competences:getmean ()
     local estimation = ""
 
-    for n = 1, MAX_COMP do
-		if self[n] ~= "" then
-			local total_score, grades_nb = 0, 0
-			local grade_pattern_s =
-				(cgradewostar / function(a) total_score = total_score + GRADE_TO_SCORE[a]
-					grades_nb = grades_nb + 1
-					return nil
-				end)^1
-			lpeg.match(grade_pattern_s, self[n])
+    for comp in pairs(self) do
+        local comp_score, grades_nb = 0, 0
+        for grade in string.gmatch(self[comp], "([ABCDabcd])%*?") do
+            comp_score = comp_score + grade_to_score(grade)
+            grades_nb = grades_nb + 1
+        end
+        local mean_comp_score = comp_score / grades_nb
 
-			local mean_score = total_score / grades_nb
+        -- Empirical conversion (something like AAB -> A, CDD -> C)
+        if mean_comp_score >= 9 then estimation = estimation .. comp .. "A"
+        elseif mean_comp_score > 5 then estimation = estimation .. comp .. "B"
+        elseif mean_comp_score >= 1 then estimation = estimation .. comp .. "C"
+        else estimation = estimation .. comp .. "D"
+        end
 
-			-- Conversion à la louche (AAB -> A, CDD -> C)
-			if mean_score >= 9 then estimation = estimation .. n .. "A"
-			elseif mean_score > 5 then estimation = estimation .. n .. "B"
-			elseif mean_score >= 1 then estimation = estimation .. n .. "C"
-			else estimation = estimation .. n .. "D"
-			end
-		end
     end
-	return Grades:new(estimation)
+
+	return _M.new(estimation)
 end
 
---- Calcul de la note chiffrée correspondant à la note
--- @param score_max (number) - la note maximale
--- @return score (number) - note chiffrée
-function Grades:getscore (score_max)
+--------------------------------------------------------------------------------
+-- Gets the score corresponding to the competences grades
+--
+-- @param score_max (number) - [optional]
+-- @return score (number)
+--------------------------------------------------------------------------------
+function Competences:getscore (score_max)
 	score_max = score_max or 20
 	local total_score, grades_nb = 0, 0
-	local mean_grades = self:getmean() -- On ne calcule une note chiffrée que sur une moyenne
+	local mean = self:getmean()
 
-    for n = 1, MAX_COMP do
-		if mean_grades[n] ~= "" then
-			total_score = total_score + GRADE_TO_SCORE[mean_grades[n]]
-			grades_nb = grades_nb + 1
-		end
+    for comp in pairs(mean) do
+        total_score = total_score + grade_to_score(mean[comp])
+        grades_nb = grades_nb + 1
     end
 	
 	if grades_nb > 0 then
-		return round(total_score / grades_nb / GRADE_TO_SCORE["A"] * score_max)
+		return round(total_score / grades_nb / grade_to_score("A") * score_max)
 	else
 		return nil
 	end
 end
 
---- Addition de deux notes (métaméthode)
--- @param a (Grades) - première note à additionner
--- @param b (Grades) - seconde note à additionner
--- @return (Grades) - somme des deux notes
-function Grades.add (a, b)
-    if a == nil and b == nil then
-        return Grades:new()
-    elseif a == nil then
-        return b
-    elseif b == nil then
-        return a
-    else
-        return Grades:new(a:tostring() .. b:tostring())
+--------------------------------------------------------------------------------
+-- Add 2 Competences
+--
+-- @param a (Competences)
+-- @param b (Competences)
+-- @return (Competences) - the sum.
+--------------------------------------------------------------------------------
+function Competences.add (a, b)
+    if not a and not b then return _M.new()
+    elseif not a then return b
+    elseif not b then return a
+    else return _M.new(a:tostring() .. b:tostring())
     end
 end
+Competences_mt.__add = Competences.add
 
---- Crée une note à partir des valeurs des notes et d’un masque des compétences
---correspondant.
--- TODO Gestion des erreurs ?
--- @param grades_values (string) - notes (sans numéro des compétences)
--- @param mask (string) - numéro des compétences
--- @return grades_s (string) - notes complètes
-function M.grades_unmask(grades_values, mask)
-    local grades_s = ""
-
-    -- TODO check syntaxe
-    -- On récupère les notes dans un tableau et les compétences correspondantes
-    -- dans un autre tableau
-    local t_comp = lpeg.match(Ct(C(comp_number_mask)^1), mask)
-    local t_grades = lpeg.match(Ct(cgradeorsep^1), grades_values)
-    if not t_comp then return "" end -- le masque n’est pas valide
-
-    -- Si les notes contiennent déjà les numéros des compétences, on n’utilise
-    -- pas le masque
-    if lpeg.match(comp_pattern^1, grades_values) then
-        return grades_values
-    end
-
-    for n = 1, #t_comp do
-        -- Si la compétence est facultative, on vérifie si la note facultative
-        -- (étoilée) est renseignée, sinon on insère un séparateur (= pas de note)
-        t_grades[n] = t_grades[n] or " " -- pas de note si vide
-        if lpeg.match(starsomewhere, t_comp[n]) and not lpeg.match(starsomewhere, t_grades[n]) then
-            -- TODO ne fonctionne pas si deux notes facultatives se suivent
-            table.insert(t_grades, n, " ")
-        end
-        -- Si la note n’est pas facultative et qu’elle est renseignée, on la rajoute.
-        if not lpeg.match(sep,t_grades[n]) then -- ne pas tenir compte des notes non renseignées
-            grades_s = grades_s .. gsub(t_comp[n], "%*", "") .. t_grades[n]
-        end
-    end
-
-    return grades_s
-end
-
-return M
+return _M
