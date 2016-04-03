@@ -19,7 +19,7 @@
 helpers = require("helpers")
 lpeg = require("lpeg")
 
-Competences = require("tgc.competences")
+Result = require("tgc.result")
 
 local M = {}
 
@@ -42,7 +42,7 @@ local C, Cb, Cc, Cg, Cs, Ct, Cmt = lpeg.C, lpeg.Cb, lpeg.Cc, lpeg.Cg, lpeg.Cs, l
 
 local Report = {
     -- quarter = "1",
-    -- grades = Grades,
+    -- result = Result,
     -- score = "12",
 }
 local Report_mt = {__index = Report}
@@ -58,7 +58,7 @@ function M.new (o)
         "Impossible de créer la moyenne : trimestre obligatoire")
     s.quarter = o.quarter
     s.score = o.score or ""
-    s.grades = Competences.new(o.grades or "")
+    s.result = Result.new(o.result or "")
 
     return s
 end
@@ -68,7 +68,7 @@ end
 function Report:write (f)
     f:write("\t\t{")
     f:write(format("quarter = \"%s\", ", self.quarter or ""))
-    f:write(format("grades = \"%s\", ", self.grades:tostring()))
+    f:write(format("result = \"%s\", ", self.result:tostring()))
     f:write(format("score = \"%s\", ", self.score or ""))
     f:write("},\n")
 end

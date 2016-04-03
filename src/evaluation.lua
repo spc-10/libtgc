@@ -16,7 +16,7 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 ]]--
 
-local Competences = require("tgc.competences")
+local Result = require("tgc.result")
 
 local M = {}
 
@@ -30,7 +30,7 @@ local Eval = {
     -- number = "3",
     -- date = "01/01/2001",
     -- quarter = "1",
-    -- grades = Grades,
+    -- result = Result,
 }
 local Eval_mt = {__index = Eval}
 
@@ -45,9 +45,10 @@ function M.new (o)
         and o.date and o.date ~= ""
         and o.quarter and o.quarter ~= "",
         "Impossible de créer l’évaluation : identifiant, date et trimestre obligatoires")
+
     s.id, s.date, s.quarter = o.id, o.date, o.quarter
     s.title, s.number = o.title or "", o.number
-    s.grades = Competences.new(o.grades or "")
+    s.result = Result.new(o.result or "")
 
     return s
 end
@@ -61,15 +62,18 @@ function Eval:write (f)
     f:write(string.format("number = \"%s\", ", self.number or ""))
     f:write(string.format("quarter = \"%s\", ", self.quarter or ""))
     f:write(string.format("date = \"%s\", ", self.date or ""))
-    f:write(string.format("grades = \"%s\", ", self.grades:tostring()))
+    f:write(string.format("result = \"%s\", ", self.result:tostring()))
     f:write("},\n")
 end
 
---- Change ou ajoute les notes d’une évaluation
--- @param grades_s (string) - notes à ajouter
-function Eval:setgrades (grades_s)
-    local grades = Competences.new(grades_s)
-    self.grades = grades
+--------------------------------------------------------------------------------
+--- Sets the esulthe evaluation.
+--
+-- @param s (string) - the result string (
+-- @param mask (string) - [optional] a list of competence numbers
+--------------------------------------------------------------------------------
+function Eval:setresult (s, mask)
+    self.result = Result.new(s, mask)
 end
 
 return M

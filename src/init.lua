@@ -17,9 +17,6 @@
 ]]--
   
 
-helpers = require("helpers")
-lpeg = require("lpeg")
-Competences = require("tgc.competences")
 Student = require("tgc.student")
 
 local M = {}
@@ -28,22 +25,9 @@ local M = {}
 local MAX_COMP = 7 -- Nombre maximal de compétences
 local GRADE_TO_SCORE = {A = 10, B = 7, C = 3, D = 0}
 
--- Quelques raccourcis.
-local find, match, format, gsub = string.find, string.match, string.format, string.gsub
-local stripaccents = helpers.stripAccents
-
-local P, S, V, R = lpeg.P, lpeg.S, lpeg.V, lpeg.R
-local C, Cb, Cc, Cg, Cs, Ct, Cmt = lpeg.C, lpeg.Cb, lpeg.Cc, lpeg.Cg, lpeg.Cs, lpeg.Ct, lpeg.Cmt
-
-
-
 --------------------------------------------------------------------------------
 -- Helpers
 --------------------------------------------------------------------------------
-local function round (num)
-	if num >= 0 then return math.floor(num+.5)
-	else return math.ceil(num-.5) end
-end
 
 --- Fonction de tri des élèves par classe puis par nom.
 -- Les lettres accentuées sont remplacées par leur équivalent non accentué
@@ -61,36 +45,6 @@ end
 local function sort_reports_byquarter (a, b)
 	return a.quarter < b.quarter
 end
-
---- Itérateur des élèves d’une classe
-function M.students_in_class (students, class)
-    local n = 0
-    return function ()
-        while true do
-            n = n + 1
-            if not students[n] then return nil end
-            if students[n].class and students[n].class == class then
-                return n
-            end
-        end
-    end
-end
-local students_in_class = M.students_in_class
-
---- Itérateur des evals d’un trimestre
-function M.evals_in_quarter (evals, quarter)
-    local n = 0
-    return function ()
-        while true do
-            n = n + 1
-            if not evals[n] then return nil end
-            if evals[n].quarter and evals[n].quarter == quarter then
-                return n
-            end
-        end
-    end
-end
-local evals_in_quarter = M.evals_in_quarter
 
 
 --------------------------------------------------------------------------------
