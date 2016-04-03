@@ -18,22 +18,20 @@
   
 
 Student = require("tgc.student")
+utils = require("tgc.utils")
 
 local M = {}
 
--- Constantes
-local MAX_COMP = 7 -- Nombre maximal de compétences
-local GRADE_TO_SCORE = {A = 10, B = 7, C = 3, D = 0}
-
 --------------------------------------------------------------------------------
--- Helpers
+--- Comparison function to use with table.sort().
+--
+-- It sorts the students by class, then by lastname and finally by name.
+-- Accentuated letters are replaced by their non-accentuated equivalent.
 --------------------------------------------------------------------------------
-
---- Fonction de tri des élèves par classe puis par nom.
--- Les lettres accentuées sont remplacées par leur équivalent non accentué
 local function sort_students_byclassname (a, b)
-	return stripaccents(a.class) .. stripaccents(a.lastname) .. stripaccents(a.name)
-		< stripaccents(b.class) .. stripaccents(b.lastname) .. stripaccents(b.name)
+    local strip = utils.stripaccents
+	return strip(a.class) .. strip(a.lastname) .. strip(a.name)
+		< strip(b.class) .. strip(b.lastname) .. strip(b.name)
 end
 
 --- Fonction de tri des évals par date.
