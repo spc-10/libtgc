@@ -70,35 +70,37 @@ local function color_grade (result)
 end
 
 --------------------------------------------------------------------------------
---- Return a Result made from grades and competences (the mask).
+--- Associates each grade of a list to the correspondant competence of the
+--- other list.
 --
--- TODO Better do with examples.
+-- A stared competence is only took into account if the corresponding grade is
+-- also stared.
 --
--- @param s (string) - a result string or grades if 'mask' is present.
--- @param mask (string) - competences corresponding to the grades in 's'.
--- @return competences (string) - the list of competences.
+-- @param grades (string) - a list of grades (numbers)
+-- @param comps (string) - a list of competences (A, B, C, D)
+-- @return result (string) - the list of competences.
 --------------------------------------------------------------------------------
-local function combine_comp_and_grades (s, mask)
+local function combine_comps_and_grades (grades, comps)
     local result = ""
-    local comps, grades = {}, {}
+    local ct, gt = {}, {} -- competences and grades table
 
-    for comp in string.gmatch(mask, "%d+%*?") do
-        comps[#comps + 1] = comp
+    for comp in string.gmatch(comps, "%d+%*?") do
+        ct[#ct + 1] = comp
     end
-    for grade in string.gmatch(s, "[ABCDabcd]%*?") do
-        grades[#grades + 1] = grade
+    for grade in string.gmatch(grades, "[ABCDabcd]%*?") do
+        gt[#gt + 1] = grade
     end
 
     local m = 1
-    for n = 1, #comps do
-        if not grades[m] then break end
-        local comp = string.match(comps[n], "%d+")
+    for n = 1, #ct do
+        if not gt[m] then break end
+        local comp = string.match(ct[n], "%d+")
         -- ignore stared competences when no stared grade is given
-        if string.match(comps[n], "%*")  and string.match(grades[m], "%*") then
-            result = result .. comp .. grades[m]
+        if string.match(ct[n], "%*")  and string.match(gt[m], "%*") then
+            result = result .. comp .. gt[m]
             m = m + 1
         elseif not string.match(comps[n], "%*") then
-            result = result .. comp .. grades[m]
+            result = result .. comp .. gt[m]
             m = m + 1
         end
     end
@@ -153,23 +155,29 @@ local Result_mt = {
 
 
 --------------------------------------------------------------------------------
---- Creates new Result
+--- Creates new Result.
 --
--- @param s (string) - a list of competences (a number) each one followed by
---                     grades (A, B, C or D). If the mask is given. this string
---                     only contains the list of grades corresponding to the
---                     competence numbers in the mask.
--- @param mask (string) - [optional] a list of competence numbers.
+-- On can use one or two args. If one args, it is considered as a comp + grades
+-- string. If two args, the first is considered as a grade list and the second
+-- as a competence list and the both are combined.
+--
+-- @param grades (string) - a list of competences (a number) each one followed
+--      by grades (A, B, C or D). If the second arg is given, this string only
+--      contains the list of grades corresponding to the competence numbers in
+--      the second arg.
+-- @param comps (string) - [optional] a list of competence numbers.
 --------------------------------------------------------------------------------
-function Result.new (s, mask)
-    s = s or ""
-    if mask then
-        s = combine_comp_and_grades(s, mask)
+function Result.new (grades, comps)
+    if not comps then -- if one arg only, then it's a result (comps + grades)
+        result = grades or ""
+    else
+        result = combine_comps_and_grades(grades, comps)
     end
+
     local o = setmetatable({}, Result_mt)
 
-    -- convert the competences string into a table
-    for comp, grades in string.gmatch(s, "(%d+)([ABCDabcd%*]+)") do
+    -- convert the result string into a table
+    for comp, grades in string.gmatch(result, "(%d+)([ABCDabcd%*]+)") do
         for grade in string.gmatch(grades, "[ABCDabcd]%*?") do
             o[comp] = (o[comp] or "") .. grade:upper()
         end
