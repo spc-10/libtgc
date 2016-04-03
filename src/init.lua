@@ -16,11 +16,10 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 ]]--
   
-
 Student = require("tgc.student")
 utils = require("tgc.utils")
 
-local M = {}
+local warning = utils.warning
 
 --------------------------------------------------------------------------------
 --- Comparison function to use with table.sort().
@@ -34,143 +33,144 @@ local function sort_students_byclassname (a, b)
 		< strip(b.class) .. strip(b.lastname) .. strip(b.name)
 end
 
---- Fonction de tri des évals par date.
+--------------------------------------------------------------------------------
+--- Comparison function to use with table.sort().
+--
+-- It sorts the evals by dates.
+--------------------------------------------------------------------------------
 local function sort_evals_bydate (a, b)
 	return a.date < b.date
 end
 
---- Fonction de tri des moyennes trimestrielles par trimestre
+--------------------------------------------------------------------------------
+--- Comparison function to use with table.sort().
+--
+-- It sorts the reports by quarters.
+--------------------------------------------------------------------------------
 local function sort_reports_byquarter (a, b)
 	return a.quarter < b.quarter
 end
 
 
+
 --------------------------------------------------------------------------------
--- Base de données
+--- TGC CLASS
+--
+-- Contains everything needed to read, write and access the student database.
 --------------------------------------------------------------------------------
 
-local Database = {
-    students = {}, -- liste des élèves
-    classes = {}, -- liste des classes
-}
-local Database_mt = {__index = Database}
+local Tgc = {}
+local Tgc_mt = {__index = Tgc}
 
---- Création d’une nouvelle Database.
--- @return o (Database) - la nouvelle base de donnée
-function M.new ()
-    local o = setmetatable({}, Database_mt)
+--------------------------------------------------------------------------------
+--- Initializes a new student database.
+--
+-- @return o (Tgc)
+--------------------------------------------------------------------------------
+function Tgc.init (filename)
+    local o = setmetatable({}, Tgc_mt)
+
+    o.students = {}
+    o.classes = {}
+    o.evaluations = {}
+
+    -- Loads the students from the database file
+    if filename then
+        if utils.file_exists(filename) then
+            function entry (s) o:addstudent(s) end
+            dofile(filename)
+        else
+            warning("File %s can't be opened or doesn't exist. No database read.\n", filename)
+        end
+    end
+
     return o
 end
 
---- Lecture de la base de données depuis un fichier.
--- Chaque entrée du fichier est sous la forme :
--- entry{...}
--- et correspond à un élève.
--- @param filename (string) - le nom du fichier de la base de données
-function Database:read (filename)
-    -- TODO tester l'existence du fichier (avec lua filesystem)
+--------------------------------------------------------------------------------
+--- Writes the database to the specified file.
+--
+-- @param filename (string) - the name of the file where one want to save the
+--      database.
+--------------------------------------------------------------------------------
+function Tgc:save (filename)
+    f, msg = io.open(filename, "w")
 
-    function entry (o)
-        self:addstudent(o)
-    end
-
-    dofile(filename)
-end
-
---- Écriture de la base de données vers un fichier.
--- @param filename (string) - le nom du fichier de la base de données
-function Database:write (filename)
-    -- TODO tester l'existence du fichier (avec lua filesystem)
-    -- et renvoyer une erreur ?
-    f = assert(io.open(filename, "w"))
-
-    for n = 1, #self.students do
-        self.students[n]:write(f)
-    end
-    f:flush()
-end
-
---- DEBUG
--- TODO : à terminer
-function Database:print ()
-
-    for n = 1, #self.students do
-        self.students[n]:print()
-    end
-end
-
---- Ajout d’un élève à la base de données.
--- @param o (table) - table contenant les attributs de l’élève
-function Database:addstudent (o)
-    table.insert(self.students, Student.new(o))
-end
-
---- Ajout d’une classe à la liste des classes en cours d’utilisation.
--- @param class (string) - le nom de la classe
-function Database:addclass (class)
-    if not class then return end
-    local found = nil
-    for n = 1, #self.classes do
-        if (class == self.classes[n]) then
-            found = true
-            break
+    if f then
+        for n = 1, #self.students do
+            self.students[n]:save(f)
         end
+        f:flush()
+    else
+        return nil, msg
     end
-    if not found then table.insert(self.classes, class) end
 end
 
---- Test si une classe existe déjà dans la base de données.
--- @param class (string) - le nom de la classe
+--------------------------------------------------------------------------------
+--- DEBUG function: print the database in a human readable way.
+-- TODO
+--------------------------------------------------------------------------------
+function Tgc:print ()
+end
+
+--------------------------------------------------------------------------------
+--- Add a student to the database.
+--
+-- @param o (object) - the student attributes (see Student class)
+--------------------------------------------------------------------------------
+function Tgc:addstudent (o)
+    o = o or {}
+    -- Add a link to the database. _addclass(), _addeval(), etc need it.
+    o.parent = self -- keep a link to the 
+    local student = Student.new(o)
+
+    table.insert(self.students, student)
+end
+
+--------------------------------------------------------------------------------
+--- Add a class to the list of all the class in the database.
+--
+-- @param class (string) - the class name to add
+--------------------------------------------------------------------------------
+function Tgc:_addclass (class)
+    for n = 1, #self.classes do
+        if not class or class == self.classes[n] then return
+        else table.insert(self.classes, class) end
+    end
+end
+
+--------------------------------------------------------------------------------
+--- Check if a class is already in the database.
+--
+-- @param class (string)
 -- @return (bool)
-function Database:classexists (class)
+--------------------------------------------------------------------------------
+function Tgc:classexists (class)
     for n = 1, #self.classes do
-        if (class == self.classes[n]) then
-            return true
-        end
+        if class == self.classes[n] then return true end
     end
     return false
 end
 
---- Renvoie la liste des classes de la base de données
--- @return classes (table) - liste des classes
-function Database:getclass_list ()
-    local classes = {}
-    local hash = {}
-
-    for n = 1, #self.students do
-        local class = self.students[n].class
-        if not hash[class] then
-            table.insert(classes, class)
-            hash[class] = true
-        end
+--------------------------------------------------------------------------------
+--- Add an evaluation to the list of all the evaluation in the database.
+--
+-- @param id (string) - the eval id
+-- @param eval (Eval) - the eval object
+--------------------------------------------------------------------------------
+function Tgc:_addeval (id, eval)
+    if self.evaluations[id] then return
+    else
+        self.evaluations[id].number = eval.number
+        self.evaluations[id].category = eval.category
+        self.evaluations[id].title = eval.title
     end
-
-    return classes
 end
 
---- Renvoie la liste des évaluation de la base de données
--- @return evals (table) - liste des évaluations
--- TODO paramètres class et quarter pour se limiter aux evals correspondantes
-function Database:geteval_list ()
-    local evals = {}
-
-    for n = 1, #self.students do
-        assert(self.students[n].evaluations, "geteval_list () : élève sans liste d’évaluations")
-        for k = 1, #self.students[n].evaluations do
-            local eval = self.students[n].evaluations[k]
-            assert(eval.id, "geteval_list () : évaluation sans identifiant")
-            local id = eval.id
-            if not evals[id] then
-                evals[id] = {number = eval.number, title = eval.title, quarter = eval.quarter}
-            end
-        end
-    end
-
-    return evals
-end
-
---- Tri de la base de données.
-function Database:sort ()
+--------------------------------------------------------------------------------
+--- Sorts the database by students, then sort the students evals and reports.
+--------------------------------------------------------------------------------
+function Tgc:sort ()
 	table.sort(self.students, sort_students_byclassname)
 
     for n = 1, #self.students do
@@ -179,4 +179,4 @@ function Database:sort ()
     end
 end
 
-return M
+return Tgc

@@ -33,7 +33,7 @@
 
 
 --------------------------------------------------------------------------------
---- Round a number !
+--- Rounds a number.
 --------------------------------------------------------------------------------
 local function round (num)
 	if num >= 0 then return math.floor(num+.5)
@@ -41,7 +41,7 @@ local function round (num)
 end
 
 --------------------------------------------------------------------------------
---- Gets the score corresponding to a grade
+--- Gets the score corresponding to a grade.
 --
 -- @param grade (string)
 --------------------------------------------------------------------------------
@@ -221,7 +221,7 @@ function Result:getmean ()
 end
 
 --------------------------------------------------------------------------------
---- Gets the score corresponding to the Result
+--- Gets the score corresponding to the Result.
 --
 -- @param score_max (number) - [optional]
 -- @return score (number)

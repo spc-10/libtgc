@@ -33,4 +33,22 @@ function _M.strip_accents (str)
     return normalized_str
 end
 
+--------------------------------------------------------------------------------
+--- Checks if a file exists (or at least could be opened for reading.
+--------------------------------------------------------------------------------
+function _M.file_exists (name)
+   local f = io.open(name, "r")
+   if not f then
+       io.close(f) ; return true
+   else return false, string.format("File %s can not be opened.", name) end
+end
+
+--------------------------------------------------------------------------------
+--- Prints a warning message on the stderr.
+--------------------------------------------------------------------------------
+function _M.warning (s, ...)
+    s = "Warning: " .. s
+    return io.stderr:write(s:format(...))
+end
+
 return _M
