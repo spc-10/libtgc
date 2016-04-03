@@ -47,11 +47,11 @@ end
 --------------------------------------------------------------------------------
 local function grade_to_score (grade)
     grade = grade:upper() -- make sure the grade is uppercase
-	if grade == "A" then return "10"
-    elseif grade == "B" then return "7"
-    elseif grade == "C" then return "3"
-    elseif grade == "D" then return "0"
-	else return "0" end -- Should be nil?
+	if grade == "A" then return 10
+    elseif grade == "B" then return 7
+    elseif grade == "C" then return 3
+    elseif grade == "D" then return 0
+	else return nil end
 end
 
 --------------------------------------------------------------------------------
@@ -97,7 +97,7 @@ end
 --------------------------------------------------------------------------------
 --- THE RESULT CLASS
 --
--- It contains the grades of each numbered competences
+-- It contains the grades of each numbered competences.
 --------------------------------------------------------------------------------
 local Result = {}
 local Result_mt = {
@@ -194,7 +194,7 @@ function Result:calcmean ()
     for comp in pairs(self) do
         local comp_score, grades_nb = 0, 0
         for grade in string.gmatch(self[comp], "([ABCDabcd])%*?") do
-            comp_score = comp_score + grade_to_score(grade)
+            comp_score = comp_score + (grade_to_score(grade) or 0)
             grades_nb = grades_nb + 1
         end
         local mean_comp_score = comp_score / grades_nb
@@ -232,12 +232,12 @@ function Result:getscore (score_max)
 	local mean = self:calcmean()
 
     for comp in pairs(mean) do
-        total_score = total_score + grade_to_score(mean[comp])
+        total_score = total_score + (grade_to_score(mean[comp]) or 0)
         grades_nb = grades_nb + 1
     end
 	
 	if grades_nb > 0 then
-		return round(total_score / grades_nb / grade_to_score("A") * score_max)
+		return round(total_score / grades_nb / (grade_to_score("A") or 0) * score_max)
 	else
 		return nil
 	end
