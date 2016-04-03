@@ -32,8 +32,6 @@
 -- Examples: 1AAB 2AC*D 5A 6DDA*
 
 
-local colors = require("ansicolors")
-
 --------------------------------------------------------------------------------
 --- Round a number !
 --------------------------------------------------------------------------------
@@ -54,19 +52,6 @@ local function grade_to_score (grade)
     elseif grade == "C" then return "3"
     elseif grade == "D" then return "0"
 	else return "0" end -- Should be nil?
-end
-
---------------------------------------------------------------------------------
---- Add the escape codes to the grades to color it.
---
--- @param result (string)
---------------------------------------------------------------------------------
-local function color_grade (result)
-    result = result:gsub("A", colors("%{green}A"))
-    result = result:gsub("B", colors("%{green}B"))
-    result = result:gsub("C", colors("%{yellow}C"))
-    result = result:gsub("D", colors("%{red}D"))
-    return result
 end
 
 --------------------------------------------------------------------------------
@@ -194,23 +179,6 @@ end
 --------------------------------------------------------------------------------
 function Result:get_grades (comp)
     return self[comp]
-end
-
---------------------------------------------------------------------------------
---- Converts the Result table into a colored string.
-
--- @param sep (string) - [optional] separator to insert between each competence.
--- @param sep (string) - [optional] function used to color the grades.
--- @return (string)
---------------------------------------------------------------------------------
-function Result:tocstring (sep, cfunc)
-    if not cfunc and type(sep) == "function" then
-        cfunc = sep
-    elseif not cfunc then
-        cfunc = color_grade
-    end
-
-    return cfunc(tostring(self))
 end
 
 --------------------------------------------------------------------------------
