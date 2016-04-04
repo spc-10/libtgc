@@ -21,36 +21,6 @@ local utils = require("tgc.utils")
 
 local warning = utils.warning
 
---------------------------------------------------------------------------------
---- Comparison function to use with table.sort().
---
--- It sorts the students by class, then by lastname and finally by name.
--- Accentuated letters are replaced by their non-accentuated equivalent.
---------------------------------------------------------------------------------
-local function sort_students_byclassname (a, b)
-    local strip = utils.stripaccents
-	return strip(a.class) .. strip(a.lastname) .. strip(a.name)
-		< strip(b.class) .. strip(b.lastname) .. strip(b.name)
-end
-
---------------------------------------------------------------------------------
---- Comparison function to use with table.sort().
---
--- It sorts the evals by dates.
---------------------------------------------------------------------------------
-local function sort_evals_bydate (a, b)
-	return a.date < b.date
-end
-
---------------------------------------------------------------------------------
---- Comparison function to use with table.sort().
---
--- It sorts the reports by quarters.
---------------------------------------------------------------------------------
-local function sort_reports_byquarter (a, b)
-	return a.quarter < b.quarter
-end
-
 
 
 --------------------------------------------------------------------------------
@@ -63,6 +33,37 @@ local Tgc = {}
 local Tgc_mt = {__index = Tgc}
 
 --------------------------------------------------------------------------------
+--- Iterates over the ordered students (for __pairs metatable).
+--------------------------------------------------------------------------------
+local function _studentpairs (t)
+    local a, b = {}, {}
+
+    -- First we store the student index with associated date-lastname-name in a
+    for idx, student in next, t do
+        local class = student.class
+        local lastname = utils.strip_accents(student.lastname)
+        local name = utils.strip_accents(student.name)
+        a[class .. lastname .. class] = idx
+    end
+    -- Next we store the date-lastname-name  in another table to sort them
+    for k in next, a do b[#b + 1] = k end
+    table.sort(b)
+
+    -- Now we can return an iterator which iterates over the sorted
+    -- date-lastname-name and return the corresponding id and the corresponding
+    -- student.
+    local i = 1
+    return function ()
+        local k = a[b[i]] -- this is the srudent id (sorted)
+        i = i + 1
+
+        return k, t[k]
+    end
+end
+
+local student_mt = {__pairs = _studentpairs}
+
+--------------------------------------------------------------------------------
 --- Initializes a new student database.
 --
 -- @return o (Tgc)
@@ -70,7 +71,7 @@ local Tgc_mt = {__index = Tgc}
 function Tgc.init (filename)
     local o = setmetatable({}, Tgc_mt)
 
-    o.students = {}
+    o.students = setmetatable({}, student_mt)
     o.classes = {}
     o.evaluations = {}
 
@@ -97,8 +98,8 @@ function Tgc:save (filename)
     f, msg = io.open(filename, "w")
 
     if f then
-        for n = 1, #self.students do
-            self.students[n]:save(f)
+        for _, student in pairs(self.students) do
+            student:save(f)
         end
         f:flush()
     else
@@ -166,18 +167,6 @@ function Tgc:addeval (id, eval)
         self.evaluations[id].number = eval.number
         self.evaluations[id].category = eval.category
         self.evaluations[id].title = eval.title
-    end
-end
-
---------------------------------------------------------------------------------
---- Sorts the database by students, then sort the students evals and reports.
---------------------------------------------------------------------------------
-function Tgc:sort ()
-	table.sort(self.students, sort_students_byclassname)
-
-    for n = 1, #self.students do
-        table.sort(self.students[n].evaluations, sort_evals_bydate)
-        table.sort(self.students[n].reports, sort_reports_byquarter)
     end
 end
 
