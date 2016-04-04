@@ -1,6 +1,6 @@
 LUA_DIR = $(HOME)/lib/lua
 
-LUAS = src/init.lua src/result.lua src/evaluation.lua src/report.lua src/student.lua src/utils.lua
+LUAS = src/init.lua src/result.lua src/student.lua src/utils.lua
 
 build clean:
 

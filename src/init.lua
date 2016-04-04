@@ -1,23 +1,23 @@
 --[[This module provides functions to handle evaluations by competences.
-  
+
     Copyright (C) 2016 by Romain Diss
-  
+
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
-  
+
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
     GNU General Public License for more details.
-  
+
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 ]]--
-  
-Student = require("tgc.student")
-utils = require("tgc.utils")
+
+local Student = require("tgc.student")
+local utils = require("tgc.utils")
 
 local warning = utils.warning
 
@@ -76,12 +76,12 @@ function Tgc.init (filename)
 
     -- Loads the students from the database file
     if filename then
-        if utils.file_exists(filename) then
+        --if utils.file_exists(filename) then
             function entry (s) o:addstudent(s) end
             dofile(filename)
-        else
-            warning("File %s can't be opened or doesn't exist. No database read.\n", filename)
-        end
+        --else
+        --    warning("File %s can't be opened or doesn't exist. No database read.\n", filename)
+        --end
     end
 
     return o
@@ -120,8 +120,8 @@ end
 --------------------------------------------------------------------------------
 function Tgc:addstudent (o)
     o = o or {}
-    -- Add a link to the database. _addclass(), _addeval(), etc need it.
-    o.parent = self -- keep a link to the 
+    -- Add a link to the database. addclass(), addeval(), etc need it.
+    o.parent = self -- keep a link to the
     local student = Student.new(o)
 
     table.insert(self.students, student)
@@ -132,11 +132,12 @@ end
 --
 -- @param class (string) - the class name to add
 --------------------------------------------------------------------------------
-function Tgc:_addclass (class)
+function Tgc:addclass (class)
     for n = 1, #self.classes do
-        if not class or class == self.classes[n] then return
-        else table.insert(self.classes, class) end
+        if not class or class == self.classes[n] then return end
     end
+    table.insert(self.classes, class)
+
 end
 
 --------------------------------------------------------------------------------
@@ -158,9 +159,10 @@ end
 -- @param id (string) - the eval id
 -- @param eval (Eval) - the eval object
 --------------------------------------------------------------------------------
-function Tgc:_addeval (id, eval)
+function Tgc:addeval (id, eval)
     if self.evaluations[id] then return
     else
+        self.evaluations[id] = {}
         self.evaluations[id].number = eval.number
         self.evaluations[id].category = eval.category
         self.evaluations[id].title = eval.title

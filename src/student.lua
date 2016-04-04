@@ -16,68 +16,122 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 ]]--
 
--- TODO:
--- [] classes : ajout des classes à la liste
--- [] évaluations : ajout des évaluations à la liste
-
-Result = require("tgc.result")
-Eval = require("tgc.evaluation")
-Report = require("tgc.report")
+local Result = require("tgc.result")
 
 
 --------------------------------------------------------------------------------
--- Élèves
+--- STUDENT CLASS
+--
+-- It contains all the information concerning the student.
 --------------------------------------------------------------------------------
 
 local Student = {
-    -- lastname = "Doe",
-    -- name = "John",
-    -- class = "5e1",
-    special = "", -- dys, pai, aménagements...
-    evaluations = {}, -- Eval table
-    reports = {}, -- Report table
 }
 local Student_mt = {__index = Student}
 
---- Création d’un nouvel élève.
--- @param o (table) - table contenant les attributs de l’élève
--- @return s (Student) - nouvel objet élève
+--------------------------------------------------------------------------------
+--- Iterates over the ordered evaluations (for __pairs metatable).
+--------------------------------------------------------------------------------
+local function _evalpairs (t)
+    local a, b = {}, {}
+
+    -- First we store the eval ids with associated date in a table
+    for k, v in next, t do a[v.date] = k end
+    -- Next we store the date in another table to sort them
+    for k in next, a do b[#b + 1] = k end
+    table.sort(b)
+
+    -- Now we can return an iterator which iterates over the sorted dates and
+    -- return the corresponding id and the corresponding eval.
+    local i = 1
+    return function ()
+        local k = a[b[i]] -- this is the eval id (sorted by date)
+        i = i + 1
+
+        return k, t[k]
+    end
+end
+
+local eval_mt = {__pairs = _evalpairs}
+
+----------------------------------------------------------------------------------
+--- Creates a new student.
+--
+-- @param o (table) - table containing the student attributes.
+-- @return s (Student)
+----------------------------------------------------------------------------------
 function Student.new (o)
     local s = setmetatable({}, Student_mt)
+    local tgc = o.parent
 
-    -- Vérifications des attributs de l’élève
-    assert(o.lastname and o.lastname ~= ""
-        and o.name and o.name ~= ""
-        and o.class and o.class ~= "",
-        "Impossible de créer l’élève : nom, prénom et classe obligatoires")
+    -- Makes sure the student get a name, a lastname and a class!
+    -- TODO assert_*() function to check this
+    assert(o.lastname and o.lastname ~= "", "Error: can not create a student without lastname.\n")
+    assert(o.name and o.name ~= "", "Error: can not create a student without lastname.\n")
+    assert(o.class and o.class ~= "", "Error: can not create a student without lastname.\n")
     s.lastname, s.name, s.class = o.lastname, o.name, o.class
     s.special = o.special or ""
 
-    -- Création des évaluations
-    s.evaluations = {}
-    if o.evaluations then
-        assert(type(o.evaluations) == "table",
-            string.format("Impossible de créer l’élève %s %s : erreur de syntaxe de la table des évaluations",
-                s.lastname, s.name))
+    -- Add this class to the database list
+    tgc:addclass(s.class)
+
+    -- Creates the evaluations
+    s.evaluations = setmetatable({}, eval_mt)
+    if o.evaluations and type(o.evaluations) == "table" then -- Checks evaluations list exists
         for n = 1, #o.evaluations do
-            assert(type(o.evaluations[n]) == "table",
-                string.format("Impossible de créer l’élève %s %s : erreur de syntaxe des évaluations",
-                    s.lastname, s.name))
-            table.insert(s.evaluations, Eval.new(o.evaluations[n]))
+            if type(o.evaluations[n]) == "table" then -- Check this evaluation exists
+                local oeval = o.evaluations[n]
+
+                -- Default values
+                oeval.category = oeval.category or "wt"
+
+                -- Some more checks
+                assert(oeval.number and oeval.number ~= "", "Error: an evaluation must have a number.\n")
+                assert(oeval.date and oeval.date ~= "", "Error: an evaluation must be associated with a date.\n")
+                assert(oeval.quarter and oeval.quarter ~= "", "Error: an evaluation must be associated with a quarter.\n")
+                local id = Student._create_evalid(oeval.category, oeval.number, o.class)
+                assert(id, "Error: can't create a valid evaluation id.\n")
+                if s.evaluations[id] then -- The evaluation already exists.
+                    local msg = "Error: A student (%s %s) can't have two evaluations with the same id.\n"
+                    error(msg:format(s.lastname, s.name))
+                end
+
+                local eval = {}
+                eval.number = oeval.number
+                eval.category = oeval.category
+                eval.title = oeval.title
+                eval.date = oeval.date
+                eval.quarter = tonumber(oeval.quarter)
+                eval.result = Result.new(oeval.result)
+
+                s.evaluations[id] = eval
+
+                -- Add this eval to the database list
+                tgc:addeval(id, eval)
+            end
         end
     end
 
-    -- Création des moyennes trimestrielles
+    -- Creates the reports
     s.reports = {}
-    if o.reports then
-        assert(type(o.reports) == "table",
-            string.format("Impossible de créer l’élève %s %s : erreur de syntaxe de la table des moyennes trimestrielles",
-                s.lastname, s.name))
+    if o.reports and type(o.reports) == "table" then -- Checks evaluations list exists
         for n = 1, #o.reports do
-            assert(type(o.reports[n]) == "table",
-                string.format("Impossible de créer l’élève %s %s : erreur de syntaxe des moyennes trimestrielles",
-                    s.lastname, s.name))
-            table.insert(s.reports, Report.new(o.reports[n]))
+            if type(o.reports[n]) == "table" then -- Check this evaluation exists
+                local orep = o.reports[n]
+
+                -- Some more checks
+                assert(orep.quarter and orep.quarter ~= "", "Error: a report must be associated with a quarter.\n")
+                if s.reports[tonumber(quarter)] then -- The report already exists.
+                    local msg = "Error: A student (%s %s) can't have two reports the same quarter.\n"
+                    error(msg:format(s.lastname, s.name))
+                end
+
+                local report = {}
+                report.score = orep.score
+                report.result = Result.new(orep.result)
+
+                s.reports[tonumber(orep.quarter)] = report
+            end
         end
     end
 
@@ -166,26 +220,15 @@ function Student:setquarter_mean (quarter, s)
     end
 end
 
---- Renvoie la note moyenne du trimestre demandé
--- @param quarter (string) - trimestre
--- @return result (Result)
-function Student:getquarter_mean (quarter)
-    for n = 1, #self.reports do
-        if self.reports[n].quarter and self.reports[n].quarter == quarter then
-            return self.reports[n].result
-        end
-    end
-    return nil -- Pas trouvé
-end
-
 --- Renvoie toutes les notes du trimestre demandé
 -- @param quarter (string) - trimestre
 -- @return result (Result)
 function Student:getquarter_result (quarter)
     local result = Result.new()
-    for n = 1, #self.evaluations do
-        if self.evaluations[n].quarter and self.evaluations[n].quarter == quarter then
-            result = result + self.evaluations[n].result
+    for k in pairs(self.evaluations) do
+        local eval = self.evaluations[k]
+        if eval.quarter and eval.quarter == quarter then
+            result = result + eval.result
         end
     end
 
@@ -204,6 +247,19 @@ function Student:print ()
    --  for n = 1, #self.reports do
    --      self.reports[n]:print()
    --  end
+end
+
+--------------------------------------------------------------------------------
+--- Creates an id for an evaluation.
+--
+-- @param cat (string) - The eval category.
+-- @param num (string) - The eval number.
+-- @param class (string)
+--------------------------------------------------------------------------------
+function Student._create_evalid (cat, num, class)
+    if not cat or not num or not class then return nil end
+
+    return tostring(cat) .. tostring(num) .. tostring(class)
 end
 
 
