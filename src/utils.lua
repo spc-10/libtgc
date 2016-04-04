@@ -19,17 +19,17 @@ local table_accents = {
 	["Ò"] = "O", ["Ó"] = "O", ["Ô"] = "O", ["Õ"] = "O", ["Ö"] = "O",
 	["Ù"] = "U", ["Ú"] = "U", ["Û"] = "U", ["Ü"] = "U",
     ["Ý"] = "Y",}
- 
+
 --------------------------------------------------------------------------------
 --- Strip accents from a string.
 --------------------------------------------------------------------------------
 function _M.strip_accents (str)
     local normalized_str = ""
- 
+
     for char in string.gmatch(str, "([%z\1-\127\194-\244][\128-\191]*)") do
         normalized_str = normalized_str .. (table_accents[char] or char)
     end
-        
+
     return normalized_str
 end
 

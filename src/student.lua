@@ -82,7 +82,8 @@ function Student.new (o)
             if type(o.evaluations[n]) == "table" then -- Check this evaluation exists
                 local oeval = o.evaluations[n]
 
-                -- Default values
+                -- Possible categories:
+                -- wt (written test, default), hw (homework), xp (experiment), att (attitude)
                 oeval.category = oeval.category or "wt"
 
                 -- Some more checks
@@ -140,32 +141,35 @@ end
 
 --- Écriture d’un élève dans la base de données.
 -- @param f (file) - fichier ouvert en écriture
-function Student:write (f)
-	f:write("entry{\n")
+function Student:save (f)
+    local fprintf = function (s, ...) f:write(s:format(...)) end
 
-    f:write(string.format("\tlastname = \"%s\", name = \"%s\",\n", self.lastname or "", self.name or ""))
-    f:write(string.format("\tclass = \"%s\",\n", self.class or ""))
-    f:write(string.format("\tspecial = \"%s\",\n", self.special or ""))
+	fprintf("entry{\n")
 
-	-- Évaluations
-	f:write("\tevaluations = {\n")
-	if self.evaluations then
-		for n = 1, #self.evaluations do
-			self.evaluations[n]:write(f)
-		end
-	end
-	f:write("\t},\n")
+    -- Student attributes
+    fprintf("\tlastname = \"%s\", name = \"%s\",\n", self.lastname or "", self.name or "")
+    fprintf("\tclass = \"%s\",\n", self.class or "")
+    fprintf("\tspecial = \"%s\",\n", self.special or "")
+
+	-- evaluations
+	fprintf("\tevaluations = {\n")
+    for _, eval in pairs(self.evaluations) do
+        fprintf("\t\t{number = \"%s\", category = \"%s\", ", eval.number, eval.category)
+        fprintf("quarter = \"%s\", date = \"%s\",\n", tostring(eval.quarter), eval.date)
+        fprintf("\t\t\ttitle = \"%s\",\n", eval.title)
+        fprintf("\t\t\tresult = \"%s\"},\n", tostring(eval.result))
+    end
+	fprintf("\t},\n")
 
 	-- Moyennes
-	f:write("\treports = {\n")
-	if self.reports then
-		for n = 1, #self.reports do
-			self.reports[n]:write(f)
-		end
-	end
-	f:write("\t},\n")
+	fprintf("\treports = {\n")
+    for i, report in ipairs(self.reports) do
+        fprintf("\t\t{quarter = \"%s\",\n", tostring(i))
+        fprintf("\t\t\tresult = \"%s\", score = \"%s\"},\n", tostring(report.result), tostring(report.score))
+    end
+	fprintf("\t},\n")
 
-	f:write("}\n")
+	fprintf("}\n")
 end
 
 --- Ajout d’une évaluation d’un élève
