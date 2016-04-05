@@ -122,10 +122,49 @@ end
 function Tgc:addstudent (o)
     o = o or {}
     -- Add a link to the database. addclass(), addeval(), etc need it.
-    o.parent = self -- keep a link to the
+    o.parent = self
     local student = Student.new(o)
 
     table.insert(self.students, student)
+end
+
+--------------------------------------------------------------------------------
+--- Iterates over the ordered students.
+--
+-- If a class pattern is given, the iterator only returns the students
+-- belonging to this class.
+--
+-- @param class (string)
+--------------------------------------------------------------------------------
+function Tgc:get_students (class_pattern)
+    local a, b = {}, {}
+
+    -- Make sure the pattern is a string (TODO make some more checks?)
+    if type(class_pattern) ~= "string" then class_pattern = nil end 
+
+    -- First we store the student index with associated date-lastname-name in a
+    for idx, student in next, self.students do
+        local class = student.class
+        local lastname = utils.strip_accents(student.lastname)
+        local name = utils.strip_accents(student.name)
+        if not class_pattern or (class_pattern and class:match(class_pattern)) then
+            a[class .. lastname .. class] = idx
+        end
+    end
+    -- Next we store the date-lastname-name  in another table to sort them
+    for k in next, a do b[#b + 1] = k end
+    table.sort(b)
+
+    -- Now we can return an iterator which iterates over the sorted
+    -- date-lastname-name and return the corresponding id and the corresponding
+    -- student.
+    local i = 1
+    return function ()
+        local k = a[b[i]] -- this is the student id (sorted)
+        i = i + 1
+
+        return self.students[k]
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -138,7 +177,6 @@ function Tgc:addclass (class)
         if not class or class == self.classes[n] then return end
     end
     table.insert(self.classes, class)
-
 end
 
 --------------------------------------------------------------------------------
