@@ -62,76 +62,45 @@ local eval_mt = {__pairs = _evalpairs}
 ----------------------------------------------------------------------------------
 function Student.new (o)
     local s = setmetatable({}, Student_mt)
-    local tgc = o.parent
 
     -- Makes sure the student get a name, a lastname and a class!
     -- TODO assert_*() function to check this
-    assert(o.lastname and o.lastname ~= "", "Error: can not create a student without lastname.\n")
-    assert(o.name and o.name ~= "", "Error: can not create a student without lastname.\n")
-    assert(o.class and o.class ~= "", "Error: can not create a student without lastname.\n")
+    assert(o.lastname and o.lastname ~= "",
+        "Error: can not create a student without lastname.\n")
+    assert(o.name and o.name ~= "",
+        "Error: can not create a student without lastname.\n")
+    assert(o.class and o.class ~= "",
+        "Error: can not create a student without lastname.\n")
     s.lastname, s.name, s.class = o.lastname, o.name, o.class
     s.special = o.special or ""
+    -- Also make sure the class can access the database (to add classes and
+    -- evals to the lists).
+    s.tgc = o.parent
 
     -- Add this class to the database list
+    local tgc = s.tgc
     tgc:addclass(s.class)
 
-    -- Creates the evaluations
+    -- Creates the evaluations (after some checks)
     s.evaluations = setmetatable({}, eval_mt)
-    if o.evaluations and type(o.evaluations) == "table" then -- Checks evaluations list exists
+    if o.evaluations and type(o.evaluations) == "table" then
         for n = 1, #o.evaluations do
-            if type(o.evaluations[n]) == "table" then -- Check this evaluation exists
-                local oeval = o.evaluations[n]
-
-                -- Possible categories:
-                -- wt (written test, default), hw (homework), xp (experiment), att (attitude)
-                oeval.category = oeval.category or "wt"
-
-                -- Some more checks
-                assert(oeval.number and oeval.number ~= "", "Error: an evaluation must have a number.\n")
-                assert(oeval.date and oeval.date ~= "", "Error: an evaluation must be associated with a date.\n")
-                assert(oeval.quarter and oeval.quarter ~= "", "Error: an evaluation must be associated with a quarter.\n")
-                local id = Student._create_evalid(oeval.category, oeval.number, o.class)
-                assert(id, "Error: can't create a valid evaluation id.\n")
-                if s.evaluations[id] then -- The evaluation already exists.
-                    local msg = "Error: A student (%s %s) can't have two evaluations with the same id.\n"
-                    error(msg:format(s.lastname, s.name))
-                end
-
-                local eval = {}
-                eval.number = oeval.number
-                eval.category = oeval.category
-                eval.title = oeval.title
-                eval.date = oeval.date
-                eval.quarter = tonumber(oeval.quarter)
-                eval.result = Result.new(oeval.result)
-
-                s.evaluations[id] = eval
-
-                -- Add this eval to the database list
-                tgc:addeval(id, eval)
+            if type(o.evaluations[n]) == "table" then
+                local already_exists = s:add_eval(o.evaluations[n])
+                msg = "Error: %s %s can not have two evals with the same ids.\n"
+                assert(not already_exists, msg:format(s.lastname, s.name))
             end
         end
     end
 
-    -- Creates the reports
+    -- Creates the reports (after some checks)
     s.reports = {}
-    if o.reports and type(o.reports) == "table" then -- Checks evaluations list exists
+    if o.reports and type(o.reports) == "table" then
         for n = 1, #o.reports do
-            if type(o.reports[n]) == "table" then -- Check this evaluation exists
-                local orep = o.reports[n]
-
-                -- Some more checks
-                assert(orep.quarter and orep.quarter ~= "", "Error: a report must be associated with a quarter.\n")
-                if s.reports[tonumber(quarter)] then -- The report already exists.
-                    local msg = "Error: A student (%s %s) can't have two reports the same quarter.\n"
-                    error(msg:format(s.lastname, s.name))
-                end
-
-                local report = {}
-                report.score = orep.score
-                report.result = Result.new(orep.result)
-
-                s.reports[tonumber(orep.quarter)] = report
+            if type(o.reports[n]) == "table" then
+                local already_exists = s:add_report(o.reports[n])
+                msg = "Error: %s %s can not have two reports the same quarter.\n"
+                assert(not already_exists, msg:format(s.lastname, s.name))
             end
         end
     end
@@ -139,23 +108,29 @@ function Student.new (o)
     return s
 end
 
---- Écriture d’un élève dans la base de données.
--- @param f (file) - fichier ouvert en écriture
+--------------------------------------------------------------------------------
+--- Writes the database in a file.
+--
+-- @param f (file) - file (open for reading)
+--------------------------------------------------------------------------------
 function Student:save (f)
     local fprintf = function (s, ...) f:write(s:format(...)) end
 
 	fprintf("entry{\n")
 
     -- Student attributes
-    fprintf("\tlastname = \"%s\", name = \"%s\",\n", self.lastname or "", self.name or "")
+    fprintf("\tlastname = \"%s\", name = \"%s\",\n",
+        self.lastname or "", self.name or "")
     fprintf("\tclass = \"%s\",\n", self.class or "")
     fprintf("\tspecial = \"%s\",\n", self.special or "")
 
 	-- evaluations
 	fprintf("\tevaluations = {\n")
     for _, eval in pairs(self.evaluations) do
-        fprintf("\t\t{number = \"%s\", category = \"%s\", ", eval.number, eval.category)
-        fprintf("quarter = \"%s\", date = \"%s\",\n", tostring(eval.quarter), eval.date)
+        fprintf("\t\t{number = \"%s\", category = \"%s\", ",
+            eval.number, eval.category)
+        fprintf("quarter = \"%s\", date = \"%s\",\n",
+            tostring(eval.quarter), eval.date)
         fprintf("\t\t\ttitle = \"%s\",\n", eval.title)
         fprintf("\t\t\tresult = \"%s\"},\n", tostring(eval.result))
     end
@@ -165,17 +140,64 @@ function Student:save (f)
 	fprintf("\treports = {\n")
     for i, report in ipairs(self.reports) do
         fprintf("\t\t{quarter = \"%s\",\n", tostring(i))
-        fprintf("\t\t\tresult = \"%s\", score = \"%s\"},\n", tostring(report.result), tostring(report.score))
+        fprintf("\t\t\tresult = \"%s\", score = \"%s\"},\n",
+            tostring(report.result), tostring(report.score))
     end
 	fprintf("\t},\n")
 
 	fprintf("}\n")
 end
 
---- Ajout d’une évaluation d’un élève
--- @param o (table) - les paramètres de l’évaluation
-function Student:addeval (o)
-    table.insert(self.evaluations, Eval.new(o))
+--------------------------------------------------------------------------------
+--- Add an evaluation the student eval list.
+--
+-- The function returns true if it writes the eval over an existing one.
+--
+-- @param o (table) - the evaluation attributes.
+-- @return (bool)
+--------------------------------------------------------------------------------
+function Student:add_eval (o)
+    local tgc = self.tgc
+
+    -- Possible categories:
+    -- wt (written test, default), hw (homework), xp (experiment), att (attitude)
+    o.category = o.category or "wt"
+
+    -- Some checks
+    assert(o.number and o.number ~= "",
+        "Error: an evaluation must have a number.\n")
+    assert(o.date and o.date ~= "",
+        "Error: an evaluation must be associated with a date.\n")
+    assert(o.quarter and o.quarter ~= "",
+        "Error: an evaluation must be associated with a quarter.\n")
+    local id = Student._create_eval_id(o.category, o.number, self.class) -- TODO get class with a getter
+    assert(id,
+        "Error: can't create a valid evaluation id.\n")
+
+    local eval = {}
+    eval.number = o.number
+    eval.category = o.category
+    eval.title = o.title
+    eval.date = o.date
+    eval.quarter = tonumber(o.quarter)
+    eval.result = Result.new(o.result)
+
+    local already_exists = self:eval_exists(id) and true or false
+    self.evaluations[id] = eval
+
+    -- Add this eval to the database list
+    tgc:addeval(id, eval)
+
+    return already_exists
+end
+
+--------------------------------------------------------------------------------
+--- Checks if an evaluation already exists in the student list.
+--
+-- @param id (string) - the evaluation id.
+--------------------------------------------------------------------------------
+function Student:eval_exists (id)
+    return self.evaluations[id] and true or false
 end
 
 --- Récupère l’évaluation ayant l’identifiant donné
@@ -191,10 +213,41 @@ function Student:geteval (id)
     return eval
 end
 
---- Ajout d’une moyenne trimestrielle à la liste des moyennes de l’élève
--- @param o (table) - les paramètres de la moyenne trimestrielle à ajouter
-function Student:addreport (o)
-    table.insert(self.reports, Report.new(o))
+--------------------------------------------------------------------------------
+--- Add a report the student report list.
+--
+-- The function returns true if it writes the report over an existing one.
+--
+-- @param o (table) - the report attributes.
+-- @return (bool)
+--------------------------------------------------------------------------------
+function Student:add_report (o)
+    -- Some checks
+    assert(o.quarter and o.quarter ~= "",
+        "Error: a report must be associated with a quarter.\n")
+    if self.reports[tonumber(quarter)] then -- The report already exists.
+        local msg = "Error: A student (%s %s) can't have two reports the same quarter.\n"
+        error(msg:format(self.lastname, self.name))
+    end
+
+    local report = {}
+    report.score = o.score
+    report.result = Result.new(o.result)
+    local quarter = tonumber(o.quarter)
+
+    local already_exists = self:report_exists(quarter) and true or false
+    self.reports[quarter] = report
+
+    return already_exists
+end
+
+--------------------------------------------------------------------------------
+--- Checks if a report already exists in the student list.
+--
+-- @param quarter (number) - the report quarter.
+--------------------------------------------------------------------------------
+function Student:report_exists (quarter)
+    return self.reports[tonumber(quarter)] and true or false
 end
 
 --- Vérifie si l’élève est dans la classe demandée.
@@ -260,7 +313,7 @@ end
 -- @param num (string) - The eval number.
 -- @param class (string)
 --------------------------------------------------------------------------------
-function Student._create_evalid (cat, num, class)
+function Student._create_eval_id (cat, num, class)
     if not cat or not num or not class then return nil end
 
     return tostring(cat) .. tostring(num) .. tostring(class)
