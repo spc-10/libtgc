@@ -110,7 +110,7 @@ local Result_mt = {
             table.sort(a)
 
             for _, comp in ipairs(a) do l[#l + 1] = comp .. self[comp] end
-            return table.concat(l, " ") or ""
+            return table.concat(l, " ") or nil
         end,
     __add = function (a, b)
             if not a and not b then return Result.new()
@@ -186,7 +186,7 @@ end
 --
 -- @return res (Grade) - moyenne
 --------------------------------------------------------------------------------
-function Result:calcmean ()
+function Result:calc_mean ()
     local mean = ""
 
     if self == nil then return end
@@ -216,8 +216,9 @@ end
 --
 -- @return (string) - the calculated result
 --------------------------------------------------------------------------------
-function Result:getmean ()
-    return self and self.calcmean() and tostring(self.calcmean()) or ""
+function Result:get_mean ()
+    local result = self:calc_mean()
+    return tostring(result)
 end
 
 --------------------------------------------------------------------------------
@@ -226,10 +227,10 @@ end
 -- @param score_max (number) - [optional]
 -- @return score (number)
 --------------------------------------------------------------------------------
-function Result:getscore (score_max)
+function Result:calc_score (score_max)
 	score_max = score_max or 20
 	local total_score, grades_nb = 0, 0
-	local mean = self:calcmean()
+	local mean = self:calc_mean()
 
     for comp in pairs(mean) do
         total_score = total_score + (grade_to_score(mean[comp]) or 0)

@@ -14,7 +14,7 @@
 
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <http://www.gnu.org/licenses/>.
-]]--
+--]]
 
 local Student = require("tgc.student")
 local utils = require("tgc.utils")
@@ -121,7 +121,7 @@ end
 --------------------------------------------------------------------------------
 function Tgc:addstudent (o)
     o = o or {}
-    -- Add a link to the database. addclass(), addeval(), etc need it.
+    -- Add a link to the database. add_class(), add_eval(), etc need it.
     o.parent = self
     local student = Student.new(o)
 
@@ -136,18 +136,18 @@ end
 --
 -- @param class (string)
 --------------------------------------------------------------------------------
-function Tgc:get_students (class_pattern)
+function Tgc:get_students (pattern)
     local a, b = {}, {}
 
     -- Make sure the pattern is a string (TODO make some more checks?)
-    if type(class_pattern) ~= "string" then class_pattern = nil end 
+    if type(pattern) ~= "string" then pattern = nil end 
 
     -- First we store the student index with associated date-lastname-name in a
     for idx, student in next, self.students do
         local class = student.class
         local lastname = utils.strip_accents(student.lastname)
         local name = utils.strip_accents(student.name)
-        if not class_pattern or (class_pattern and class:match(class_pattern)) then
+        if not pattern or (pattern and class:match(pattern)) then
             a[class .. lastname .. class] = idx
         end
     end
@@ -172,11 +172,39 @@ end
 --
 -- @param class (string) - the class name to add
 --------------------------------------------------------------------------------
-function Tgc:addclass (class)
+function Tgc:add_class (class)
     for n = 1, #self.classes do
         if not class or class == self.classes[n] then return end
     end
     table.insert(self.classes, class)
+end
+
+--------------------------------------------------------------------------------
+--- Return the list of the classes in the database.
+--
+-- The list is sorted in reverse alphabetic order.
+--
+-- @param pattern (string) - [optional] to filter classes.
+-- @return classes (table) - the sorted list of the class strings.
+--------------------------------------------------------------------------------
+function Tgc:get_classes (pattern)
+    local a, classes = {}, {}
+
+    -- Make sure the pattern is a string (TODO make some more checks?)
+    if type(pattern) ~= "string" then pattern = nil end 
+
+    for _, class in pairs(self.classes) do
+        if not pattern or (pattern and class:match(pattern)) then
+            a[#a + 1] = class
+        end
+    end
+    table.sort(a, function(a, b) return a > b end)
+
+    for _, class in ipairs(a) do
+        table.insert(classes, class)
+    end
+
+    return classes
 end
 
 --------------------------------------------------------------------------------
@@ -193,7 +221,22 @@ function Tgc:classexists (class)
 end
 
 --------------------------------------------------------------------------------
+--- Creates an id for an evaluation.
+--
+-- @param num (string) - The eval number.
+-- @param class (string)
+--------------------------------------------------------------------------------
+function Tgc._create_eval_id (num, class)
+    if not num or not class then return nil end
+    local sep = "-"
+
+    return tostring(num) .. sep .. tostring(class)
+end
+
+--------------------------------------------------------------------------------
 --- Add an evaluation to the list of all the evaluation in the database.
+--
+-- TODO: add a class level version of the evaluation.
 --
 -- @param id (string) - the eval id
 -- @param eval (Eval) - the eval object
@@ -205,7 +248,33 @@ function Tgc:addeval (id, eval)
         self.evaluations[id].number = eval.number
         self.evaluations[id].category = eval.category
         self.evaluations[id].title = eval.title
+        self.evaluations[id].date = eval.date
     end
+end
+
+--------------------------------------------------------------------------------
+--- Search for an eval id in the database list.
+--
+-- If the evaluation doesn't exists, we search for the equivalent evaluation
+-- for another class. We supposed the class are of the form
+-- "[3456]e[0-9]+(g[0-9])*"
+--
+-- @param number (number) - the eval number
+-- @param class (string)
+--------------------------------------------------------------------------------
+function Tgc:search_eval_id (number, class)
+    local id = self._create_eval_id (number, class)
+
+    if self.evaluations[id] then
+        return id
+    else
+        local class_pattern = class:match("^([0-9]+e)")
+        for _, c in pairs(self:get_classes(class_pattern)) do
+            id = self._create_eval_id (number, c)
+            if self.evaluations[id] then return id end
+        end
+    end
+    return nil
 end
 
 return Tgc

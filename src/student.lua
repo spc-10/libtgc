@@ -14,7 +14,7 @@
 
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <http://www.gnu.org/licenses/>.
-]]--
+--]]
 
 local Result = require("tgc.result")
 
@@ -79,7 +79,7 @@ function Student.new (o)
 
     -- Add this class to the database list
     local tgc = s.tgc
-    tgc:addclass(s.class)
+    tgc:add_class(s.class)
 
     -- Creates the evaluations (after some checks)
     s.evaluations = setmetatable({}, eval_mt)
@@ -141,12 +141,38 @@ function Student:save (f)
     for i, report in ipairs(self.reports) do
         fprintf("\t\t{quarter = \"%s\",\n", tostring(i))
         fprintf("\t\t\tresult = \"%s\", score = \"%s\"},\n",
-            tostring(report.result), tostring(report.score))
+            tostring(report.result), report.score or "")
     end
 	fprintf("\t},\n")
 
 	fprintf("}\n")
 end
+
+--------------------------------------------------------------------------------
+--- Returns the full name of a student.
+--
+-- @param option (string) - [optional] option to format the name.
+-- @return fullname (string)
+--------------------------------------------------------------------------------
+function Student:fullname (option)
+    option = option or "standard"
+    local fullname
+    local sep = " "
+
+    if option == "reverse" then
+        fullname = self.name .. sep .. self.lastname
+    else
+        fullname = self.lastname .. sep .. self.name
+    end
+
+    return fullname
+end
+
+--------------------------------------------------------------------------------
+--
+-- EVALUATIONS
+--
+--------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 --- Add an evaluation the student eval list.
@@ -170,7 +196,7 @@ function Student:add_eval (o)
         "Error: an evaluation must be associated with a date.\n")
     assert(o.quarter and o.quarter ~= "",
         "Error: an evaluation must be associated with a quarter.\n")
-    local id = Student._create_eval_id(o.category, o.number, self.class) -- TODO get class with a getter
+    local id = tgc._create_eval_id(o.number, self.class) -- TODO get class with a getter
     assert(id,
         "Error: can't create a valid evaluation id.\n")
 
@@ -213,6 +239,37 @@ function Student:geteval (id)
     return eval
 end
 
+----------------------------------------------------------------------------------
+--- Return a result that combines the results of all the corresponding evals.
+--
+-- @param criteria (table) - a table of criteria to take into account:
+--                           quarter = pattern
+--                           category = pattern
+-- @return result (string)
+----------------------------------------------------------------------------------
+function Student:combine_evals_result (criteria)
+    criteria = criteria or {}
+    local quarter = criteria.quarter or nil
+    local category = criteria.category or nil
+
+    local result = Result.new()
+    for _, eval in pairs(self.evaluations) do -- __pairs should sort this
+        if eval.quarter and string.match(eval.quarter, quarter) then
+            result = result + eval.result
+        end
+    end
+
+    result = tostring(result)
+    return result ~= "" and result or nil
+end
+
+
+--------------------------------------------------------------------------------
+--
+-- REPORTS
+--
+--------------------------------------------------------------------------------
+
 --------------------------------------------------------------------------------
 --- Add a report the student report list.
 --
@@ -250,46 +307,65 @@ function Student:report_exists (quarter)
     return self.reports[tonumber(quarter)] and true or false
 end
 
---- Vérifie si l’élève est dans la classe demandée.
--- @param class
-function Student:isinclass (class)
-    return self.class == class
+--------------------------------------------------------------------------------
+--- Returns the result of the corresponding report.
+--
+-- @param quarter (number) - the report quarter.
+--------------------------------------------------------------------------------
+function Student:get_report_result (quarter)
+    quarter = tonumber(quarter)
+    local result
+
+    if self.reports[quarter] and self.reports[quarter].result then
+        result = tostring(self.reports[quarter].result)
+    else return nil end
+
+    return result ~= "" and result or nil
 end
 
---- Modifie la note moyenne du trimestre demandé
--- @param quarter (string) - trimestre
--- @param s (string) - a result
-function Student:setquarter_mean (quarter, s)
-    local report_found = nil
-    local result = Result.new(s)
-    result = result:getmean() -- la moyenne trimestrielle doit être une moyenne !
+--------------------------------------------------------------------------------
+--- Calculate the result of the corresponding report.
+--
+-- @param quarter (number) - the report quarter.
+--------------------------------------------------------------------------------
+function Student:calc_report_result (quarter)
+    quarter = tonumber(quarter)
 
-    for n = 1, #self.reports do
-        if self.reports[n].quarter and self.reports[n].quarter == quarter then
-            report_found = true
-            self.reports[n].result = result
-        end
-    end
+    local eval_results = self:combine_evals_result{quarter = quarter}
 
-    -- Le bilan trimestriel n’existe pas encore
-    if not report_found then
-        self:addreport{quarter = quarter, result = result:tostring()}
-    end
+    -- Stores the eval results in a Result class to be able to average.
+    local result = Result.new(eval_results)
+    local calc_result = result:get_mean()
+
+    return calc_result
 end
 
---- Renvoie toutes les notes du trimestre demandé
--- @param quarter (string) - trimestre
--- @return result (Result)
-function Student:getquarter_result (quarter)
-    local result = Result.new()
-    for k in pairs(self.evaluations) do
-        local eval = self.evaluations[k]
-        if eval.quarter and eval.quarter == quarter then
-            result = result + eval.result
-        end
-    end
+--------------------------------------------------------------------------------
+--- Returns the score corresponding to the result of the corresponding report.
+--
+-- @param quarter (number) - the report quarter.
+--------------------------------------------------------------------------------
+function Student:get_report_score (quarter)
+    quarter = tonumber(quarter)
 
-    return result
+    if not self.reports[quarter] then return nil
+    elseif self.reports[quarter].score then
+        return tonumber(score)
+    else return nil end
+end
+
+--------------------------------------------------------------------------------
+--- Calculate the score corresponding to the result of the corresponding report.
+--
+-- @param quarter (number) - the report quarter.
+-- @return score (number)
+--------------------------------------------------------------------------------
+function Student:calc_report_score (quarter)
+    quarter = tonumber(quarter)
+
+    if self.reports[quarter] and self.reports[quarter].result then
+        return self.reports[quarter].result:calc_score()
+    else return nil end
 end
 
 --- DEBUG
@@ -304,19 +380,6 @@ function Student:print ()
    --  for n = 1, #self.reports do
    --      self.reports[n]:print()
    --  end
-end
-
---------------------------------------------------------------------------------
---- Creates an id for an evaluation.
---
--- @param cat (string) - The eval category.
--- @param num (string) - The eval number.
--- @param class (string)
---------------------------------------------------------------------------------
-function Student._create_eval_id (cat, num, class)
-    if not cat or not num or not class then return nil end
-
-    return tostring(cat) .. tostring(num) .. tostring(class)
 end
 
 
