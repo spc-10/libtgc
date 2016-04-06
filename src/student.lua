@@ -206,7 +206,7 @@ function Student:add_eval (o)
     eval.title = o.title
     eval.date = o.date
     eval.quarter = tonumber(o.quarter)
-    eval.result = Result.new(o.result)
+    eval.result = Result.new(o.result, o.mask)
 
     local already_exists = self:eval_exists(id) and true or false
     self.evaluations[id] = eval
@@ -226,17 +226,42 @@ function Student:eval_exists (id)
     return self.evaluations[id] and true or false
 end
 
---- Récupère l’évaluation ayant l’identifiant donné
--- @param id (string) - identifiant de l’évaluation a récupérer
--- @return eval (Eval) - l’évaluation trouvée
-function Student:geteval (id)
-    local eval = nil
-    for n = 1, #self.evaluations do
-        if self.evaluations[n].id and self.evaluations[n].id == id then
-            eval = self.evaluations[n]
-        end
+--------------------------------------------------------------------------------
+--- Search for an eval id in the student list.
+--
+-- @param number (number) - the eval number
+--------------------------------------------------------------------------------
+function Student:search_eval_id (number)
+    local tgc = self.tgc
+    local id = tgc._create_eval_id (number, self.class)
+
+    if self.evaluations[id] then
+        return id
+    else
+        return nil
     end
-    return eval
+end
+
+--------------------------------------------------------------------------------
+--- Returns the eval attributes.
+--
+-- @param id (string) - the evaluation id.
+-- @return attribute (?)
+--------------------------------------------------------------------------------
+function Student:get_eval_att (id, attribute)
+    if not self.evaluations[id] then return nil end
+
+    local eval = self.evaluations[id]
+
+    attribute = tostring(attribute)
+    if attribute == "number" then return eval.number
+    elseif attribute == "category" then return eval.category
+    elseif attribute == "quarter" then return tonumber(eval.quarter)
+    elseif attribute == "date" then return eval.date
+    elseif attribute == "title" then return eval.title
+    elseif attribute == "result" then return tostring(eval.result)
+    else return nil
+    end
 end
 
 ----------------------------------------------------------------------------------
@@ -288,7 +313,7 @@ function Student:add_report (o)
     end
 
     local report = {}
-    report.score = o.score
+    report.score = tonumber(o.score)
     report.result = Result.new(o.result)
     local quarter = tonumber(o.quarter)
 
@@ -350,7 +375,7 @@ function Student:get_report_score (quarter)
 
     if not self.reports[quarter] then return nil
     elseif self.reports[quarter].score then
-        return tonumber(score)
+        return tonumber(self.reports[quarter].score)
     else return nil end
 end
 

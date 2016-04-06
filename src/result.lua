@@ -55,19 +55,24 @@ local function grade_to_score (grade)
 end
 
 --------------------------------------------------------------------------------
---- Associates each grade of a list to the correspondant competence of the
+--- Associates each grade of a list to the corresponding competence of the
 --- other list.
 --
 -- A stared competence is only took into account if the corresponding grade is
--- also stared.
+-- also stared. If the grade already contains competences, then the list of
+-- competences is discarded.
 --
--- @param grades (string) - a list of grades (numbers)
--- @param comps (string) - a list of competences (A, B, C, D)
+-- @param grades (string) - a list of grades (A, B, C, D)
+-- @param comps (string) - a list of competences (number)
 -- @return result (string) - the list of competences.
 --------------------------------------------------------------------------------
 local function combine_comps_and_grades (grades, comps)
     local result = ""
     local ct, gt = {}, {} -- competences and grades table
+
+    -- First check if the grades contains competences. In this case, no need to
+    -- combine.
+    if grades:match("%d+") then return grades end
 
     for comp in string.gmatch(comps, "%d+%*?") do
         ct[#ct + 1] = comp
@@ -84,7 +89,7 @@ local function combine_comps_and_grades (grades, comps)
         if string.match(ct[n], "%*")  and string.match(gt[m], "%*") then
             result = result .. comp .. gt[m]
             m = m + 1
-        elseif not string.match(comps[n], "%*") then
+        elseif not string.match(ct[n], "%*") then
             result = result .. comp .. gt[m]
             m = m + 1
         end

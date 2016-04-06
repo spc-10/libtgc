@@ -277,4 +277,24 @@ function Tgc:search_eval_id (number, class)
     return nil
 end
 
+--------------------------------------------------------------------------------
+--- Returns the eval attributes.
+--
+-- @param id (string) - the evaluation id.
+-- @return attribute (?)
+--------------------------------------------------------------------------------
+function Tgc:get_eval_att (id, attribute)
+    if not self.evaluations[id] then return nil end
+
+    local eval = self.evaluations[id]
+
+    attribute = tostring(attribute)
+    if attribute == "number" then return eval.number
+    elseif attribute == "category" then return eval.category
+    elseif attribute == "title" then return eval.title
+    elseif attribute == "date" then return eval.date
+    else return nil
+    end
+end
+
 return Tgc
