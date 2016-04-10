@@ -17,7 +17,7 @@
 --]]
 
 local Student = require("tgc.student")
-local utils = require("tgc.utils")
+local utils   = require("tgc.utils")
 
 local warning = utils.warning
 
@@ -33,37 +33,6 @@ local Tgc = {}
 local Tgc_mt = {__index = Tgc}
 
 --------------------------------------------------------------------------------
---- Iterates over the ordered students (for __pairs metatable).
---------------------------------------------------------------------------------
-local function _studentpairs (t)
-    local a, b = {}, {}
-
-    -- First we store the student index with associated date-lastname-name in a
-    for idx, student in next, t do
-        local class = student.class
-        local lastname = utils.strip_accents(student.lastname)
-        local name = utils.strip_accents(student.name)
-        a[class .. lastname .. class] = idx
-    end
-    -- Next we store the date-lastname-name  in another table to sort them
-    for k in next, a do b[#b + 1] = k end
-    table.sort(b)
-
-    -- Now we can return an iterator which iterates over the sorted
-    -- date-lastname-name and return the corresponding id and the corresponding
-    -- student.
-    local i = 1
-    return function ()
-        local k = a[b[i]] -- this is the srudent id (sorted)
-        i = i + 1
-
-        return k, t[k]
-    end
-end
-
-local student_mt = {__pairs = _studentpairs}
-
---------------------------------------------------------------------------------
 --- Initializes a new student database.
 --
 -- @return o (Tgc)
@@ -71,14 +40,12 @@ local student_mt = {__pairs = _studentpairs}
 function Tgc.init (filename)
     local o = setmetatable({}, Tgc_mt)
 
-    o.students = setmetatable({}, student_mt)
-    o.classes = {}
-    o.evaluations = {}
+    o.students, o.classes, o.evaluations = {}, {}, {}
 
     -- Loads the students from the database file
     if filename then
         --if utils.file_exists(filename) then
-            function entry (s) o:addstudent(s) end
+            function entry (s) o:add_student(s) end
             dofile(filename)
         --else
         --    warning("File %s can't be opened or doesn't exist. No database read.\n", filename)
@@ -119,10 +86,9 @@ end
 --
 -- @param o (object) - the student attributes (see Student class)
 --------------------------------------------------------------------------------
-function Tgc:addstudent (o)
+function Tgc:add_student (o)
     o = o or {}
-    -- Add a link to the database. add_class(), add_eval(), etc need it.
-    o.parent = self
+    o.parent = self -- usefull to have an access to the database methods
     local student = Student.new(o)
 
     table.insert(self.students, student)
@@ -136,23 +102,27 @@ end
 --
 -- @param class (string)
 --------------------------------------------------------------------------------
-function Tgc:get_students (pattern)
+function Tgc:next_student (pattern)
     local a, b = {}, {}
 
     -- Make sure the pattern is a string (TODO make some more checks?)
-    if type(pattern) ~= "string" then pattern = nil end 
+    if type(pattern) ~= "string" then
+        pattern = nil
+    end 
 
     -- First we store the student index with associated date-lastname-name in a
     for idx, student in next, self.students do
-        local class = student.class
+        local class    = student.class
         local lastname = utils.strip_accents(student.lastname)
-        local name = utils.strip_accents(student.name)
+        local name     = utils.strip_accents(student.name)
         if not pattern or (pattern and class:match(pattern)) then
-            a[class .. lastname .. class] = idx
+            a[class .. lastname .. name] = idx
         end
     end
     -- Next we store the date-lastname-name  in another table to sort them
-    for k in next, a do b[#b + 1] = k end
+    for k in next, a do
+        b[#b + 1] = k
+    end
     table.sort(b)
 
     -- Now we can return an iterator which iterates over the sorted
@@ -187,7 +157,7 @@ end
 -- @param pattern (string) - [optional] to filter classes.
 -- @return classes (table) - the sorted list of the class strings.
 --------------------------------------------------------------------------------
-function Tgc:get_classes (pattern)
+function Tgc:get_class_list (pattern)
     local a, classes = {}, {}
 
     -- Make sure the pattern is a string (TODO make some more checks?)
@@ -213,7 +183,7 @@ end
 -- @param class (string)
 -- @return (bool)
 --------------------------------------------------------------------------------
-function Tgc:classexists (class)
+function Tgc:classe_exists (class)
     for n = 1, #self.classes do
         if class == self.classes[n] then return true end
     end
@@ -242,18 +212,56 @@ end
 -- @param eval (Eval) - the eval object
 --------------------------------------------------------------------------------
 function Tgc:addeval (id, eval)
-    if self.evaluations[id] then return
+    if self.evaluations[id] then
+        -- No mask is created when the database is read, so we add it later.
+        if eval.mask then
+            self.evaluations[id].mask = self.evaluations[id].mask or eval.mask
+        end
     else
         self.evaluations[id] = {}
-        self.evaluations[id].number = eval.number
+        self.evaluations[id].number   = eval.number
         self.evaluations[id].category = eval.category
-        self.evaluations[id].title = eval.title
-        self.evaluations[id].date = eval.date
+        self.evaluations[id].class    = eval.class
+        self.evaluations[id].title    = eval.title
+        self.evaluations[id].date     = eval.date
+        self.evaluations[id].quarter  = eval.quarter
+        self.evaluations[id].mask     = eval.mask
     end
 end
 
 --------------------------------------------------------------------------------
---- Search for an eval id in the database list.
+--- Returns an array of the eval ids.
+--
+-- @param class (string)
+-- @param quarter (number)
+-- @return (table) - a list of the eval ids
+--------------------------------------------------------------------------------
+function Tgc:get_eval_id_list (class, quarter)
+    local eval_list = {}
+
+    for id, eval in pairs(self.evaluations) do
+        if (not quarter or eval.quarter == quarter)
+            and (not class or eval.class == class) then
+            table.insert(eval_list, id)
+        end
+    end
+    table.sort(eval_list)
+
+    return eval_list
+    
+end
+
+--------------------------------------------------------------------------------
+--- Checks if an evaluation already exists in the database list.
+--
+-- @param id (string) - the evaluation id.
+--------------------------------------------------------------------------------
+function Tgc:eval_exists (id)
+    return self.evaluations[id] and true or false
+end
+
+--------------------------------------------------------------------------------
+--- Gets the id of an eval in the database list.
 --
 -- If the evaluation doesn't exists, we search for the equivalent evaluation
 -- for another class. We supposed the class are of the form
@@ -261,17 +269,20 @@ end
 --
 -- @param number (number) - the eval number
 -- @param class (string)
+-- @return id - the eval id
 --------------------------------------------------------------------------------
-function Tgc:search_eval_id (number, class)
+function Tgc:get_eval_id (number, class)
     local id = self._create_eval_id (number, class)
 
-    if self.evaluations[id] then
+    if self:eval_exists(id) then
         return id
     else
         local class_pattern = class:match("^([0-9]+e)")
-        for _, c in pairs(self:get_classes(class_pattern)) do
+        for _, c in pairs(self:get_class_list(class_pattern)) do
             id = self._create_eval_id (number, c)
-            if self.evaluations[id] then return id end
+            if self.evaluations[id] then
+                return id
+            end
         end
     end
     return nil
@@ -281,20 +292,19 @@ end
 --- Returns the eval attributes.
 --
 -- @param id (string) - the evaluation id.
--- @return attribute (?)
+-- @return number, category, quarter, date, title, mask
 --------------------------------------------------------------------------------
-function Tgc:get_eval_att (id, attribute)
-    if not self.evaluations[id] then return nil end
+function Tgc:get_eval_info (id, attribute)
+    if not self:eval_exists(id) then return nil end
 
-    local eval = self.evaluations[id]
+    local number   = self.evaluations[id].number
+    local category = self.evaluations[id].category
+    local quarter  = tonumber(self.evaluations[id].quarter)
+    local date     = self.evaluations[id].date
+    local title    = self.evaluations[id].title
+    local mask     = self.evaluations[id].mask
 
-    attribute = tostring(attribute)
-    if attribute == "number" then return eval.number
-    elseif attribute == "category" then return eval.category
-    elseif attribute == "title" then return eval.title
-    elseif attribute == "date" then return eval.date
-    else return nil
-    end
+    return number, category, quarter, date, title, mask
 end
 
 return Tgc
