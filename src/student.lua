@@ -79,6 +79,7 @@ function Student.new (o)
     s.lastname = o.lastname
     s.name     = o.name
     s.class    = o.class
+    s.location = o.location
     s.special  = o.special or ""
     s.tgc      = o.parent -- for an acces to the database methods
 
@@ -127,6 +128,7 @@ function Student:save (f)
     f:write(format("\tlastname = \"%s\", ", self.lastname))
     f:write(format("name = \"%s\",\n", self.name))
     f:write(format("\tclass = \"%s\",\n", self.class))
+    f:write(format("\tlocation = \"%s\",\n", self.location))
     f:write(format("\tspecial = \"%s\",\n", self.special or ""))
 
 	-- evaluations
@@ -172,6 +174,24 @@ function Student:fullname (option)
     end
 
     return fullname
+end
+
+--------------------------------------------------------------------------------
+--- Returns the student's location.
+--
+-- @return location (number)
+--------------------------------------------------------------------------------
+function Student:get_location ()
+    return self.location
+end
+
+--------------------------------------------------------------------------------
+--- Change the student's location
+--
+-- @param location (number)
+--------------------------------------------------------------------------------
+function Student:set_location (location)
+    self.location = location or nil
 end
 
 --------------------------------------------------------------------------------
@@ -388,6 +408,9 @@ end
 --------------------------------------------------------------------------------
 --- Calculate the score corresponding to the result of the corresponding report.
 --
+-- If the report does not exist, try to calculate a score from the quarter
+-- evaluations.
+--
 -- @param quarter (number) - the report quarter.
 -- @return score (number)
 --------------------------------------------------------------------------------
@@ -395,7 +418,8 @@ function Student:calc_report_score (quarter)
     if self:report_exists(quarter) and self.reports[quarter].result then
         return self.reports[quarter].result:calc_score()
     else
-        return nil
+        local result = Result.new(self:calc_report_result(quarter))
+        return result:calc_score()
     end
 end
 

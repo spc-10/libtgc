@@ -35,6 +35,7 @@ local Tgc_mt = {__index = Tgc}
 --------------------------------------------------------------------------------
 --- Initializes a new student database.
 --
+-- @param filename (string) - the name of the database to load.
 -- @return o (Tgc)
 --------------------------------------------------------------------------------
 function Tgc.init (filename)

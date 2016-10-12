@@ -115,7 +115,7 @@ local Result_mt = {
             table.sort(a)
 
             for _, comp in ipairs(a) do l[#l + 1] = comp .. self[comp] end
-            return table.concat(l, " ") or nil
+            return table.concat(l, " ")
         end,
     __add = function (a, b)
             if not a and not b then return Result.new()
@@ -206,7 +206,7 @@ function Result:calc_mean ()
 
         -- Empirical conversion (something like AAB -> A, CDD -> C)
         if mean_comp_score >= 9 then mean = mean .. comp .. "A"
-        elseif mean_comp_score > 5 then mean = mean .. comp .. "B"
+        elseif mean_comp_score >= 5 then mean = mean .. comp .. "B"
         elseif mean_comp_score >= 1 then mean = mean .. comp .. "C"
         else mean = mean .. comp .. "D"
         end
