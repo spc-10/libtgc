@@ -184,7 +184,7 @@ end
 -- @param class (string)
 -- @return (bool)
 --------------------------------------------------------------------------------
-function Tgc:classe_exists (class)
+function Tgc:class_exists (class)
     for n = 1, #self.classes do
         if class == self.classes[n] then return true end
     end

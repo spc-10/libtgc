@@ -32,12 +32,25 @@
 -- Examples: 1AAB 2AC*D 5A 6DDA*
 
 
+-- Score of each competences
+-- ["competence number"] = {score_for_A, score_for_B, score_for_C, score_for_D}
+-- TODO: move this in a config file!
+local COMP_SCORE = {
+    ["1"] = {8, 5, 3, 0},
+    ["2"] = {12, 8, 4, 0},
+    ["3"] = {8, 5, 3, 0},
+    ["4"] = {8, 5, 3, 0},
+    ["5"] = {4, 3, 1, 0},
+    default = {10, 7, 3, 0},
+}
+
+
 --------------------------------------------------------------------------------
 --- Rounds a number.
 --------------------------------------------------------------------------------
 local function round (num)
-	if num >= 0 then return math.floor(num+.5)
-	else return math.ceil(num-.5) end
+	if num >= 0 then return math.floor(num + 0.5)
+	else return math.ceil(num - 0.5) end
 end
 
 --------------------------------------------------------------------------------
@@ -45,12 +58,16 @@ end
 --
 -- @param grade (string)
 --------------------------------------------------------------------------------
-local function grade_to_score (grade)
+local function grade_to_score (grade, comp)
     grade = grade:upper() -- make sure the grade is uppercase
-	if grade == "A" then return 10
-    elseif grade == "B" then return 7
-    elseif grade == "C" then return 3
-    elseif grade == "D" then return 0
+    if not COMP_SCORE[comp] then
+        comp = "default"
+    end
+
+	if grade == "A" then return COMP_SCORE[comp][1]
+    elseif grade == "B" then return COMP_SCORE[comp][2]
+    elseif grade == "C" then return COMP_SCORE[comp][3]
+    elseif grade == "D" then return COMP_SCORE[comp][4]
 	else return nil end
 end
 
@@ -199,16 +216,20 @@ function Result:calc_mean ()
     for comp in pairs(self) do
         local comp_score, grades_nb = 0, 0
         for grade in string.gmatch(self[comp], "([ABCDabcd])%*?") do
-            comp_score = comp_score + (grade_to_score(grade) or 0)
+            comp_score = comp_score + (grade_to_score(grade, comp) or 0)
             grades_nb = grades_nb + 1
         end
         local mean_comp_score = comp_score / grades_nb
 
         -- Empirical conversion (something like AAB -> A, CDD -> C)
-        if mean_comp_score >= 9 then mean = mean .. comp .. "A"
-        elseif mean_comp_score >= 5 then mean = mean .. comp .. "B"
-        elseif mean_comp_score >= 1 then mean = mean .. comp .. "C"
-        else mean = mean .. comp .. "D"
+        if mean_comp_score >= 0.9 * grade_to_score("A", comp) then
+            mean = mean .. comp .. "A"
+        elseif mean_comp_score >= 0.5 * grade_to_score("A", comp) then
+            mean = mean .. comp .. "B"
+        elseif mean_comp_score >= 0.1 * grade_to_score("A", comp) then
+            mean = mean .. comp .. "C"
+        else
+            mean = mean .. comp .. "D"
         end
 
     end
@@ -234,16 +255,16 @@ end
 --------------------------------------------------------------------------------
 function Result:calc_score (score_max)
 	score_max = score_max or 20
-	local total_score, grades_nb = 0, 0
+	local total_score, total_coef = 0, 0
 	local mean = self:calc_mean()
 
     for comp in pairs(mean) do
-        total_score = total_score + (grade_to_score(mean[comp]) or 0)
-        grades_nb = grades_nb + 1
+        total_score = total_score + (grade_to_score(mean[comp], comp) or 0)
+        total_coef = total_coef + grade_to_score("A", comp)
     end
 	
-	if grades_nb > 0 then
-		return round(total_score / grades_nb / (grade_to_score("A") or 0) * score_max)
+	if total_coef > 0 then
+		return round(total_score / total_coef * score_max)
 	else
 		return nil
 	end
