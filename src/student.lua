@@ -324,7 +324,8 @@ end
 -- @param quarter (number)
 -- @return result (string)
 ----------------------------------------------------------------------------------
-function Student:sum_eval_results (quarter)
+function Student:sum_eval_results (quarter, comp)
+    quarter = quarter and tonumber(quarter)
     local result = Result.new()
     for _, eval in pairs(self.evaluations) do -- __pairs should sort this
         if not quarter or eval.quarter == quarter then
@@ -332,7 +333,11 @@ function Student:sum_eval_results (quarter)
         end
     end
 
-    return tostring(result)
+    if comp and result:get_grades(comp) then
+        return comp .. result:get_grades(comp)
+    else
+        return tostring(result)
+    end
 end
 
 
@@ -372,6 +377,7 @@ end
 -- @param quarter (number) - the report quarter.
 --------------------------------------------------------------------------------
 function Student:report_exists (quarter)
+    quarter = quarter and tonumber(quarter)
     return self.reports[quarter] and true or false
 end
 
@@ -379,15 +385,24 @@ end
 --- Returns informations on the report.
 --
 -- @param quarter (number) - the report quarter.
+-- @param comp (number) [optional] - only returns infos concerning the
+--      specified competence. If omitted, returns infos for all competences.
 -- @return result, score
 --------------------------------------------------------------------------------
-function Student:get_report_info (quarter)
+function Student:get_report_info (quarter, comp)
+    quarter = quarter and tonumber(quarter)
     if not self:report_exists(quarter) then return nil end
+    local result, score
 
-    local result = tostring(self.reports[quarter].result)
-    local score  = self.reports[quarter].score
+    if not comp then
+        result = tostring(self.reports[quarter].result)
+        score  = self.reports[quarter].score
+    else
+        result = self.reports[quarter].result:get_grades(comp)
+        score = nil
+    end
 
-    return result, score
+    return result, score, 20 -- 20 = max_score
 end
 
 --------------------------------------------------------------------------------
@@ -395,14 +410,19 @@ end
 --
 -- @param quarter (number) - the report quarter.
 --------------------------------------------------------------------------------
-function Student:calc_report_result (quarter)
+function Student:calc_report_result (quarter, comp)
+    quarter = quarter and tonumber(quarter)
     local eval_results = self:sum_eval_results(quarter)
 
     -- Stores the eval results in a Result class to be able to average.
     local result = Result.new(eval_results)
-    local calc_result = result:get_mean()
+    local calc_result = result:calc_mean()
 
-    return calc_result
+    if not comp then
+        return tostring(calc_result)
+    else
+        return calc_result:get_grades(comp) or ""
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -414,11 +434,20 @@ end
 -- @param quarter (number) - the report quarter.
 -- @return score (number)
 --------------------------------------------------------------------------------
-function Student:calc_report_score (quarter)
-    if self:report_exists(quarter) and self.reports[quarter].result then
-        return self.reports[quarter].result:calc_score()
+function Student:calc_report_score (quarter, comp)
+    quarter = quarter and tonumber(quarter)
+    local result
+
+    if not self:report_exists(quarter) or not self.reports[quarter].result then
+        -- We must calculate the results first/
+        result = Result.new(self:calc_report_result(quarter))
     else
-        local result = Result.new(self:calc_report_result(quarter))
+        result = self.reports[quarter].result
+    end
+
+    if comp then 
+        return result:calc_comp_score(comp)
+    else
         return result:calc_score()
     end
 end

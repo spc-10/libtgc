@@ -37,10 +37,11 @@
 -- TODO: move this in a config file!
 local COMP_SCORE = {
     ["1"] = {8, 5, 3, 0},
-    ["2"] = {12, 8, 4, 0},
+    ["2"] = {10, 7, 3, 0},
     ["3"] = {8, 5, 3, 0},
     ["4"] = {8, 5, 3, 0},
     ["5"] = {4, 3, 1, 0},
+    ["6"] = {4, 3, 1, 0},
     default = {10, 7, 3, 0},
 }
 
@@ -248,6 +249,23 @@ function Result:get_mean ()
 end
 
 --------------------------------------------------------------------------------
+--- Gets the score corresponding to a result competence.
+--
+-- @param comp (number)
+-- @return score (number), max_score (number)
+--------------------------------------------------------------------------------
+function Result:calc_comp_score (comp)
+    -- result must first be meaned.
+	local mean = self:calc_mean()
+    if not mean or not mean[comp] then return nil end
+
+    local score = grade_to_score(mean[comp], comp)
+    local max_score = grade_to_score("A", comp)
+
+    return score, max_score
+end
+
+--------------------------------------------------------------------------------
 --- Gets the score corresponding to the Result.
 --
 -- @param score_max (number) - [optional]
@@ -256,15 +274,16 @@ end
 function Result:calc_score (score_max)
 	score_max = score_max or 20
 	local total_score, total_coef = 0, 0
-	local mean = self:calc_mean()
 
-    for comp in pairs(mean) do
-        total_score = total_score + (grade_to_score(mean[comp], comp) or 0)
-        total_coef = total_coef + grade_to_score("A", comp)
+    for comp in pairs(self) do
+        local score, coef = self:calc_comp_score(comp)
+
+        total_score = total_score + (score or 0)
+        total_coef = total_coef + (coef or 0)
     end
 	
 	if total_coef > 0 then
-		return round(total_score / total_coef * score_max)
+		return round(total_score * 10 / total_coef * score_max) / 10, score_max
 	else
 		return nil
 	end
