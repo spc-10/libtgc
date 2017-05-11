@@ -192,6 +192,23 @@ function Tgc:class_exists (class)
 end
 
 --------------------------------------------------------------------------------
+--- Return the number of students in a class
+--
+-- @param class (string)
+-- @return nb_students (number)
+--------------------------------------------------------------------------------
+function Tgc:get_student_number (class)
+    -- TODO
+    local nb_students = 0
+
+    for student in self:next_student(class) do
+        nb_students = nb_students + 1
+    end
+
+    return nb_students
+end
+
+--------------------------------------------------------------------------------
 --- Creates an id for an evaluation.
 --
 -- @param num (string) - The eval number.
