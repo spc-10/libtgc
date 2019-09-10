@@ -79,7 +79,7 @@ function Student.new (o)
     s.lastname = o.lastname
     s.name     = o.name
     s.class    = o.class
-    s.location = o.location
+    s.place    = o.place
     s.special  = o.special or ""
     s.tgc      = o.parent -- for an acces to the database methods
 
@@ -128,7 +128,7 @@ function Student:save (f)
     f:write(format("\tlastname = \"%s\", ", self.lastname))
     f:write(format("name = \"%s\",\n", self.name))
     f:write(format("\tclass = \"%s\",\n", self.class))
-    f:write(format("\tlocation = \"%s\",\n", self.location))
+    f:write(format("\tplace = \"%s\",\n", self.place))
     f:write(format("\tspecial = \"%s\",\n", self.special or ""))
 
 	-- evaluations
@@ -177,21 +177,21 @@ function Student:fullname (option)
 end
 
 --------------------------------------------------------------------------------
---- Returns the student's location.
+--- Returns the student's place.
 --
--- @return location (number)
+-- @return place (number)
 --------------------------------------------------------------------------------
-function Student:get_location ()
-    return self.location
+function Student:get_place ()
+    return self.place
 end
 
 --------------------------------------------------------------------------------
---- Change the student's location
+--- Change the student's place
 --
--- @param location (number)
+-- @param place (number)
 --------------------------------------------------------------------------------
-function Student:set_location (location)
-    self.location = location or nil
+function Student:set_place (place)
+    self.place = place or nil
 end
 
 --------------------------------------------------------------------------------
