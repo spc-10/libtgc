@@ -111,7 +111,7 @@ function Tgc:next_student (pattern)
         pattern = nil
     end 
 
-    -- First we store the student index with associated date-lastname-name in a
+    -- First we store the student index with associated class-lastname-name in a
     for idx, student in next, self.students do
         local class    = student.class
         local lastname = utils.strip_accents(student.lastname)
