@@ -81,11 +81,6 @@ function Student.new (o)
     s.class    = o.class
     s.place    = o.place
     s.special  = o.special or ""
-    s.tgc      = o.parent -- for an acces to the database methods
-
-    -- Add this class to the database list
-    local tgc = s.tgc
-    tgc:add_class(s.class)
 
     -- Creates the evaluations (after some checks)
     s.evaluations = setmetatable({}, eval_mt)

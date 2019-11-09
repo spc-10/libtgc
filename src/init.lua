@@ -34,26 +34,29 @@ local Tgc_mt = {__index = Tgc}
 
 --------------------------------------------------------------------------------
 --- Initializes a new student database.
---
--- @param filename (string) - the name of the database to load.
 -- @return o (Tgc)
 --------------------------------------------------------------------------------
-function Tgc.init (filename)
+function Tgc.init ()
     local o = setmetatable({}, Tgc_mt)
-
     o.students, o.classes, o.evaluations = {}, {}, {}
+    return o
+end
 
+--------------------------------------------------------------------------------
+--- Initializes a new student database.
+--
+-- @param filename (string) - the name of the database to load.
+--------------------------------------------------------------------------------
+function Tgc:load (filename)
     -- Loads the students from the database file
     if filename then
         --if utils.file_exists(filename) then
-            function entry (s) o:add_student(s) end
+            function entry (s) self:add_student(s) end
             dofile(filename)
         --else
         --    warning("File %s can't be opened or doesn't exist. No database read.\n", filename)
         --end
     end
-
-    return o
 end
 
 --------------------------------------------------------------------------------
@@ -89,10 +92,13 @@ end
 --------------------------------------------------------------------------------
 function Tgc:add_student (o)
     o = o or {}
-    o.parent = self -- usefull to have an access to the database methods
     local student = Student.new(o)
-
     table.insert(self.students, student)
+
+    -- Add class to the database list
+    if not self:class_exists(o.class) then
+        table.insert(self.classes, o.class)
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -136,18 +142,6 @@ function Tgc:next_student (pattern)
 
         return self.students[k]
     end
-end
-
---------------------------------------------------------------------------------
---- Add a class to the list of all the class in the database.
---
--- @param class (string) - the class name to add
---------------------------------------------------------------------------------
-function Tgc:add_class (class)
-    for n = 1, #self.classes do
-        if not class or class == self.classes[n] then return end
-    end
-    table.insert(self.classes, class)
 end
 
 --------------------------------------------------------------------------------
