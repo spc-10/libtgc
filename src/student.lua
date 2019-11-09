@@ -116,7 +116,6 @@ end
 
 --------------------------------------------------------------------------------
 --- Writes the database in a file.
--- TODO handle nil values.
 --
 -- @param f (file) - file (open for reading)
 --------------------------------------------------------------------------------
@@ -126,30 +125,30 @@ function Student:save (f)
 	f:write("entry{\n")
 
     -- Student attributes
-    f:write(format("\tlastname = \"%s\", ", self.lastname))
-    f:write(format("name = \"%s\",\n", self.name))
-    f:write(format("\tclass = \"%s\",\n", self.class))
-    f:write(format("\tplace = \"%s\",\n", self.place))
-    f:write(format("\tspecial = \"%s\",\n", self.special or ""))
+    f:write(format("\tlastname = %q, ", self.lastname))
+    f:write(format("name = %q,\n", self.name))
+    f:write(format("\tclass = %q,\n", self.class))
+    f:write(format("\tplace = %q,\n", self.place))
+    f:write(format("\tspecial = %q,\n", self.special or ""))
 
 	-- evaluations
 	f:write("\tevaluations = {\n")
     for _, eval in pairs(self.evaluations) do
-        f:write(format("\t\t{number = \"%s\", ", eval.number))
-        f:write(format("category = \"%s\", ", eval.category))
-        f:write(format("quarter = \"%s\", ", tostring(eval.quarter)))
-        f:write(format("date = \"%s\",\n", eval.date))
-        f:write(format("\t\t\ttitle = \"%s\",\n", eval.title))
-        f:write(format("\t\t\tresult = \"%s\"},\n", tostring(eval.result)))
+        f:write(format("\t\t{number = %q, ", eval.number))
+        f:write(format("category = %q, ", eval.category))
+        f:write(format("quarter = %q, ", eval.quarter))
+        f:write(format("date = %q,\n", eval.date))
+        f:write(format("\t\t\ttitle = %q,\n", eval.title))
+        f:write(format("\t\t\tresult = %q},\n", tostring(eval.result)))
     end
 	f:write("\t},\n")
 
 	-- Moyennes
 	f:write("\treports = {\n")
     for i, report in ipairs(self.reports) do
-        f:write(format("\t\t{quarter = \"%s\",\n", tostring(i)))
-        f:write(format("\t\t\tresult = \"%s\", ", tostring(report.result)))
-        f:write(format("score = \"%s\"},\n", report.score or ""))
+        f:write(format("\t\t{quarter = %q,\n", i))
+        f:write(format("\t\t\tresult = %q, ", tostring(report.result)))
+        f:write(format("score = %q},\n", report.score or nil))
     end
 	f:write("\t},\n")
 
