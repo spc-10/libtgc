@@ -34,6 +34,34 @@ function _M.strip_accents (str)
 end
 
 --------------------------------------------------------------------------------
+--- Checks if a date is valid
+--  @param date (string) - "%Y/%m/%d" see C strftime()
+--  @return (bool)
+--------------------------------------------------------------------------------
+function _M.is_date_valid (date)
+    if type(date) ~= "string" then return false end
+
+    local year, month, day = string.match(date, "(%d%d%d%d)/(%d%d)/(%d%d)")
+    if not year then return false end
+    if tonumber(month) < 1 or tonumber(month) > 12 then return false end
+    if tonumber(day) < 1 or tonumber(day) > 31 then return false end
+
+    return true
+end
+
+--------------------------------------------------------------------------------
+--- Checks if a quarter is valid
+--  @param quarter (number) - 1, 2 or 3 are valid!
+--  @return (bool)
+--------------------------------------------------------------------------------
+function _M.is_quarter_valid (quarter)
+    if not tonumber(quarter) then return false end
+    if quarter ~= 1 and quarter ~= 2 and quarter ~= 3 then return false end
+
+    return true
+end
+
+--------------------------------------------------------------------------------
 --- Checks if a file exists (or at least could be opened for reading.
 --------------------------------------------------------------------------------
 function _M.file_exists (name)

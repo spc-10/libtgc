@@ -16,17 +16,9 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 --]]
 
-local database = require "tgc.database"
-local student  = require "tgc.student"
-local eval     = require "tgc.eval"
-local utils    = require "tgc.utils"
-
--------------------------------------------------------------------------------
--- TgC version number.
-
-_COPYRIGHT   = "Copyright (c) 2019 Romain Diss"
-_DESCRIPTION = "Tentative de Gestion des Compétences"
-_VERSION     = "TgC 0.0.2"
+local Student = require "tgc.student"
+local Eval    = require "tgc.eval"
+local utils   = require "tgc.utils"
 
 
 --------------------------------------------------------------------------------
@@ -61,8 +53,8 @@ function Tgc:load (filename)
     f:close()
 
     -- define constructors to read data
-    function student_entry (s) self:add_student(s) end
-    function evaluation_entry (s) self:add_eval(s) end
+    function student (s) self:add_student(s) end
+    function evaluation (s) self:add_eval(s) end
     dofile(filename)
 end
 
@@ -76,11 +68,11 @@ function Tgc:write (filename)
     if not f then return nil, msg end
 
     -- Write evaluations first (needed to load student results)
-    for _, e in pairs(self.evaluations) do
-        e:write(f)
+    for _, eval in pairs(self.evaluations) do
+        eval:write(f)
     end
-    for s in self:next_student() do
-        s:write(f)
+    for student in self:next_student() do
+        student:write(f)
     end
     f:flush()
 end
@@ -107,8 +99,8 @@ function Tgc:add_student (o)
     -- Add a link to the database
     o.db = self
 
-    local s = student.new(o)
-    table.insert(self.students, s)
+    local student = Student.new(o)
+    table.insert(self.students, student)
     self.student_nb = self.student_nb + 1
 
     -- Add class to the database list
@@ -124,9 +116,9 @@ end
 --------------------------------------------------------------------------------
 function Tgc:add_eval (o)
     o = o or {}
-    local e = eval.new(o)
+    local eval = Eval.new(o)
 
-    table.insert(self.evaluations, e)
+    table.insert(self.evaluations, eval)
     self.evaluation_nb = self.evaluation_nb + 1
 end
 
@@ -143,10 +135,10 @@ function Tgc:next_student (pattern)
     pattern = tostring(pattern or ".*")
 
     -- First we store the student index with associated class-lastname-name in a
-    for idx, s in next, self.students do
-        local class    = s.class
-        local lastname = utils.strip_accents(s.lastname)
-        local name     = utils.strip_accents(s.name)
+    for idx, student in next, self.students do
+        local class    = student.class
+        local lastname = utils.strip_accents(student.lastname)
+        local name     = utils.strip_accents(student.name)
         if string.match(class, pattern) then
             a[class .. lastname .. name] = idx
         end
@@ -187,10 +179,10 @@ function Tgc:find_eval(number, class)
         return nil, msg
     end
 
-    for _, e in pairs(self.evaluations) do
-        local pattern = e:get_class()
-        if e:get_number() == number and string.find(class, pattern) then
-            return e, msg
+    for _, eval in pairs(self.evaluations) do
+        local pattern = eval:get_class()
+        if eval:get_number() == number and string.find(class, pattern) then
+            return eval, msg
         end
     end
 end
@@ -220,12 +212,7 @@ function Tgc:find_classes (pattern)
         table.insert(classes, class)
     end
 
-    -- Return nil if no class found
-    if next(classes) then
-        return classes
-    else
-        return nil
-    end
+    return classes
 end
 
 --------------------------------------------------------------------------------
@@ -238,7 +225,7 @@ function Tgc:get_student_number (class)
     -- TODO
     local nb_students = 0
 
-    for s in self:next_student(class) do
+    for student in self:next_student(class) do
         nb_students = nb_students + 1
     end
 

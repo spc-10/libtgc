@@ -16,7 +16,9 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 --]]
 
-local Result = require("tgc.result")
+local Result    = require "tgc.result"
+local Eval      = require "tgc.eval"
+--local find_eval = require "tgc".find_eval()
 
 
 --------------------------------------------------------------------------------
@@ -25,76 +27,69 @@ local Result = require("tgc.result")
 -- It contains all the information concerning the student.
 --------------------------------------------------------------------------------
 
-local Student = {
-}
+local Student    = {}
 local Student_mt = {__index = Student}
 
---------------------------------------------------------------------------------
---- Iterates over the ordered evaluations (for __pairs metatable).
---------------------------------------------------------------------------------
-local function _evalpairs (t)
-    local a, b = {}, {}
-
-    -- First we store the eval ids with associated date in a table
-    for k, v in next, t do
-        a[v.date] = k
-    end
-    -- Next we store the date in another table to sort them
-    for k in next, a do
-        b[#b + 1] = k
-    end
-    table.sort(b)
-
-    -- Now we can return an iterator which iterates over the sorted dates and
-    -- return the corresponding id and the corresponding eval.
-    local i = 1
-    return function ()
-        local k = a[b[i]] -- this is the eval id (sorted by date)
-        i = i + 1
-
-        return k, t[k]
-    end
-end
-
-local eval_mt = {__pairs = _evalpairs}
 
 ----------------------------------------------------------------------------------
 --- Creates a new student.
 --
 -- @param o (table) - table containing the student attributes.
--- @return s (Student)
+--      o.lastname (string)                                                                                                              
+--      o.name (string)
+--      o.class (string)
+--      o.place (number) *optional*
+--      o.students (Student[]) - 
+--      o.evaluations (Eval[]) - 
+--      o.classes (table) - 
+--      o.results (Result[]) - 
+--      o.reports (Report[]) - 
+-- @return s (Student), [msg (string)] - Return nil, msg if invalid attributes.
 ----------------------------------------------------------------------------------
 function Student.new (o)
     local s = setmetatable({}, Student_mt)
+    local msg = nil
 
-    -- Makes sure the student get a name, a lastname and a class!
-    -- TODO assert_*() function to check this
-    assert(o.lastname and o.lastname ~= "",
-        "Error: can not create a student without lastname.\n")
-    assert(o.name and o.name ~= "",
-        "Error: can not create a student without lastname.\n")
-    assert(o.class and o.class ~= "",
-        "Error: can not create a student without lastname.\n")
+    -- Make sure the student get non empty name, lastname and class!
+    if not o.lastname or not o.name or not o.class 
+        or string.find(o.lastname, "^%s*$")
+        or string.find(o.name, "^%s*$")
+        or string.find(o.class, "^%s*$") then
+        msg = "cannot create a student without lastname, name or class"
+        return nil, msg
+    end
+    -- Make sure the link to the database is ok
+    if not o.db or type(o.db ~= "table") then
+        msg = "cannot create a student without a valid database link"
+    end
 
-    s.lastname = o.lastname
-    s.name     = o.name
-    s.class    = o.class
-    s.place    = o.place
-    s.special  = o.special or ""
+    -- Links to the student and evaluations lists in the database
+    s.db          = o.db
 
-    -- Creates the evaluations (after some checks)
-    s.evaluations = setmetatable({}, eval_mt)
-    if o.evaluations and type(o.evaluations) == "table" then
-        for n = 1, #o.evaluations do
-            if type(o.evaluations[n]) == "table" then
-                local already_exists = s:add_eval(o.evaluations[n])
-                msg = "Error: %s %s can not have two evals with the same ids.\n"
-                assert(not already_exists, msg:format(s.lastname, s.name))
+    -- Main student attributes
+    s.lastname    = o.lastname
+    s.name        = o.name
+    s.class       = o.class
+    s.place       = tonumber(o.place)
+
+    -- Create the evaluation results
+    s.results = {}
+    if o.results and type(o.results) == "table" then
+        for n = 1, #o.results do
+            local eval = nil
+            local result = o.results[n]
+            if result and type(result) == "table" then
+                eval = s.db:find_eval(result.number, class)
             end
+            -- Add the eval link to the result
+            result.eval = eval
+            -- Insert the new result
+            table.insert(s.results, Result.new(result))
         end
     end
 
     -- Creates the reports (after some checks)
+    -- TODO
     s.reports = {}
     if o.reports and type(o.reports) == "table" then
         for n = 1, #o.reports do
@@ -106,87 +101,131 @@ function Student.new (o)
         end
     end
 
-    return s
+    return s, msg
 end
 
 --------------------------------------------------------------------------------
---- Writes the database in a file.
+--- Update an existing student 
+--
+-- @param o (table) - table containing the student attributes.
+--      o.lastname (string)                                                                                                              
+--      o.name (string)
+--      o.class (string)
+--      o.place (number) *optional*
+--      o.students (Student[]) - 
+--      o.evaluations (Eval[]) - 
+--      o.classes (table) - 
+-- @return (bool) - true if an attribute has been updated
+--------------------------------------------------------------------------------
+function Student:update (o)
+    o = o or {}
+    local update_done = false
+
+    -- Update valid non empty attributes
+    if o.lastname
+        and type(o.lastname) == "string"
+        and string.match(o.lastname, "^%s*$") then
+        self.lastname = tostring(o.lastname)
+        update_done = true
+    end
+    if o.name
+        and type(o.name) == "string"
+        and string.match(o.name, "^%s*$") then
+        self.name = tostring(o.name)
+        update_done = true
+    end
+    if o.class
+        and type(o.class) == "string"
+        and string.match(o.class, "^%s*$") then
+        self.class = tostring(o.class)
+        update_done = true
+    end
+    if tonumber(o.place) then
+        self.place = tonumber(o.place)
+        update_done = true
+    end
+
+    return update_done
+end
+
+--------------------------------------------------------------------------------
+--- Write the database in a file.
 --
 -- @param f (file) - file (open for reading)
 --------------------------------------------------------------------------------
-function Student:save (f)
+function Student:write (f)
     local format = string.format
+    local lastname, name = self:get_lastname(), self:get_name()
+    local class, place = self:get_class(), self:get_place()
+    local results, reports = self:get_results(), self:get_reports()
 
-	f:write("entry{\n")
+    -- Open
+	f:write("student_entry{\n\t")
 
     -- Student attributes
-    f:write(format("\tlastname = %q, ", self.lastname))
-    f:write(format("name = %q,\n", self.name))
-    f:write(format("\tclass = %q,\n", self.class))
-    f:write(format("\tplace = %q,\n", self.place))
-    f:write(format("\tspecial = %q,\n", self.special or ""))
-
-	-- evaluations
-	f:write("\tevaluations = {\n")
-    for _, eval in pairs(self.evaluations) do
-        f:write(format("\t\t{number = %q, ", eval.number))
-        f:write(format("category = %q, ", eval.category))
-        f:write(format("quarter = %q, ", eval.quarter))
-        f:write(format("date = %q,\n", eval.date))
-        f:write(format("\t\t\ttitle = %q,\n", eval.title))
-        f:write(format("\t\t\tresult = %q},\n", tostring(eval.result)))
+    f:write(format("lastname = %q, ",  lastname))
+    f:write(format("name = %q, ",      name))
+    f:write(format("class = %q, ",     class))
+    if self.place then
+        f:write(format("place = %q, ", place))
     end
-	f:write("\t},\n")
+    --f:write("\n\t"))
+    --f:write(format("special = %q, ",  self.special))
+    f:write("\n")
 
-	-- Moyennes
-	f:write("\treports = {\n")
-    for i, report in ipairs(self.reports) do
-        f:write(format("\t\t{quarter = %q,\n", i))
-        f:write(format("\t\t\tresult = %q, ", tostring(report.result)))
-        f:write(format("score = %q},\n", report.score or nil))
+	-- Only print non empty results
+    if type(results) == "table" and next(results) then
+        f:write("\tresults = {\n")
+        for _, result in pairs(self:get_results()) do
+            result:write(f)
+        end
+        f:write("\t},\n")
     end
-	f:write("\t},\n")
 
+	-- Reports
+    -- TODO
+    if type(reports) == "table" and next(reports) then
+        f:write("\treports = {\n")
+        for i, report in ipairs(reports) do
+            f:write(format("\t\t{quarter = %q,\n", i))
+            f:write(format("\t\t\tresult = %q, ", tostring(report.result)))
+            f:write(format("score = %q},\n", report.score or nil))
+        end
+        f:write("\t},\n")
+    end
+
+    -- Close
 	f:write("}\n")
     f:flush()
 end
 
 --------------------------------------------------------------------------------
+--- Return the student attributes
+--------------------------------------------------------------------------------
+function Student:get_lastname () return self.lastname end
+function Student:get_name ()     return self.name end
+function Student:get_class ()    return self.class end
+function Student:get_place ()    return self.place end
+function Student:get_results ()  return self.results end
+function Student:get_reports ()  return self.reports end
+
+--------------------------------------------------------------------------------
 --- Returns the full name of a student.
 --
--- @param option (string) - [optional] option to format the name.
+-- @param options (table) - [optional] options to format the name.
+--      - options.reverse (bool)
 -- @return fullname (string)
 --------------------------------------------------------------------------------
-function Student:fullname (option)
-    option = option or "standard"
-    local fullname
+function Student:get_fullname (options)
+    options = options or {}
+    local reverse = options.reverse or false
     local sep = " "
 
-    if option == "reverse" then
-        fullname = self.name .. sep .. self.lastname
+    if reverse then
+        return self.name .. sep .. self.lastname
     else
-        fullname = self.lastname .. sep .. self.name
+        return self.lastname .. sep .. self.name
     end
-
-    return fullname
-end
-
---------------------------------------------------------------------------------
---- Returns the student's place.
---
--- @return place (number)
---------------------------------------------------------------------------------
-function Student:get_place ()
-    return self.place
-end
-
---------------------------------------------------------------------------------
---- Change the student's place
---
--- @param place (number)
---------------------------------------------------------------------------------
-function Student:set_place (place)
-    self.place = place or nil
 end
 
 --------------------------------------------------------------------------------
@@ -196,70 +235,23 @@ end
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
---- Add an evaluation the student eval list.
+--- Add an evaluation result in the student corresponding list.
 --
--- The function returns true if it writes the eval over an existing one.
---
--- @param o (table) - the evaluation attributes.
--- @return (bool)
+-- @param o (table) - the evaluation result attributes.
+-- @return nil, msg if no result is added.
 --------------------------------------------------------------------------------
-function Student:add_eval (o)
-    local tgc = self.tgc
+function Student:add_result (o)
+    local class = self:get_class()
+    local eval  = self.db:find_eval(o.number, class)
 
-    -- Possible categories:
-    -- wt (written test, default), hw (homework), xp (experiment), att (attitude)
-    o.category = o.category or "wt"
+    if not eval then return nil, "cannot add result: eval not found" end
 
-    -- Some checks
-    assert(o.number and o.number ~= "", "Error: an evaluation must have a number.\n")
-    assert(o.date and o.date ~= "", "Error: an evaluation must be associated with a date.\n")
-    assert(o.quarter and o.quarter ~= "", "Error: an evaluation must be associated with a quarter.\n")
-    local id = tgc._create_eval_id(o.number, self.class) -- TODO get class with a getter
-    assert(id, "Error: can't create a valid evaluation id.\n")
-
-    local already_exists = self:eval_exists(id)
-    local eval = {}
-
-    eval.number   = o.number
-    eval.category = o.category
-    eval.title    = o.title
-    eval.date     = o.date
-    eval.quarter  = tonumber(o.quarter)
-    eval.result   = Result.new(o.result, o.mask)
-
-    self.evaluations[id] = eval
-
-    -- Add this eval to the database list
-    eval.mask     = o.mask -- only relevant for the database list
-    eval.class    = self.class -- only relevant for the database list
-    tgc:addeval(id, eval)
-
-    return already_exists
-end
-
---------------------------------------------------------------------------------
---- Checks if an evaluation already exists in the student list.
---
--- @param id (string) - the evaluation id.
---------------------------------------------------------------------------------
-function Student:eval_exists (id)
-    return self.evaluations[id] and true or false
-end
-
---------------------------------------------------------------------------------
---- Search for an eval id in the student list.
---
--- @param number (number) - the eval number
---------------------------------------------------------------------------------
-function Student:get_eval_id (number)
-    local tgc = self.tgc
-    local id = tgc._create_eval_id (number, self.class)
-
-    if self.evaluations[id] then
-        return id
-    else
-        return nil
-    end
+    -- add the eval link to the result
+    o.eval = eval
+    -- create the result
+    local new = Result.new(o)
+    table.insert(self.results, new)
+    return new
 end
 
 --------------------------------------------------------------------------------
@@ -267,8 +259,8 @@ end
 --
 -- @param quarter (number) - [optional] the quarter (all if nil)
 --------------------------------------------------------------------------------
-function Student:next_eval_ids (quarter)
-    quarter = quarter and tonumber(quarter) or nil
+function Student:next_result (quarter)
+    quarter = tonumber(quarter) or nil
     local a, b = {}, {}
 
     -- First we store the eval ids with associated date in a table
@@ -294,30 +286,12 @@ function Student:next_eval_ids (quarter)
     end
 end
 
---------------------------------------------------------------------------------
---- Returns the eval attributes.
---
--- @param id (string) - the evaluation id.
--- @return number, category, quarter, date, title, result
---------------------------------------------------------------------------------
-function Student:get_eval_info (id)
-    if not self:eval_exists(id) then return nil end
-
-    local number   = self.evaluations[id].number
-    local category = self.evaluations[id].category
-    local quarter  = tonumber(self.evaluations[id].quarter)
-    local date     = self.evaluations[id].date
-    local title    = self.evaluations[id].title
-    local result   = tostring(self.evaluations[id].result)
-
-    return number, category, quarter, date, title, result
-end
-
 ----------------------------------------------------------------------------------
 --- Return a result that sums the results of all the corresponding evals.
 --
 -- @param quarter (number)
 -- @return result (string)
+-- TODO
 ----------------------------------------------------------------------------------
 function Student:sum_eval_results (quarter, comp)
     quarter = quarter and tonumber(quarter)
@@ -332,118 +306,6 @@ function Student:sum_eval_results (quarter, comp)
         return comp .. result:get_grades(comp)
     else
         return tostring(result)
-    end
-end
-
-
---------------------------------------------------------------------------------
---
--- REPORTS
---
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
---- Add a report the student report list.
---
--- The function returns true if it writes the report over an existing one.
---
--- @param o (table) - the report attributes.
--- @return (bool)
---------------------------------------------------------------------------------
-function Student:add_report (o)
-    -- Some checks
-    assert(o.quarter and o.quarter ~= "", "Error: a report must be associated with a quarter.\n")
-
-    local already_exists = self:report_exists(quarter)
-    local quarter = tonumber(o.quarter)
-    local report = {}
-
-    report.score  = tonumber(o.score)
-    report.result = Result.new(o.result)
-
-    self.reports[quarter] = report
-
-    return already_exists
-end
-
---------------------------------------------------------------------------------
---- Checks if a report already exists in the student list.
---
--- @param quarter (number) - the report quarter.
---------------------------------------------------------------------------------
-function Student:report_exists (quarter)
-    quarter = quarter and tonumber(quarter)
-    return self.reports[quarter] and true or false
-end
-
---------------------------------------------------------------------------------
---- Returns informations on the report.
---
--- @param quarter (number) - the report quarter.
--- @param comp (number) [optional] - only returns infos concerning the
---      specified competence. If omitted, returns infos for all competences.
--- @return result, score
---------------------------------------------------------------------------------
-function Student:get_report_info (quarter, comp)
-    quarter = quarter and tonumber(quarter)
-    if not self:report_exists(quarter) then return nil end
-    local result, score
-
-    if not comp then
-        result = tostring(self.reports[quarter].result)
-        score  = self.reports[quarter].score
-    else
-        result = self.reports[quarter].result:get_grades(comp)
-        score = nil
-    end
-
-    return result, score, 20 -- 20 = max_score
-end
-
---------------------------------------------------------------------------------
---- Calculate the result of the corresponding report.
---
--- @param quarter (number) - the report quarter.
---------------------------------------------------------------------------------
-function Student:calc_report_result (quarter, comp)
-    quarter = quarter and tonumber(quarter)
-    local eval_results = self:sum_eval_results(quarter)
-
-    -- Stores the eval results in a Result class to be able to average.
-    local result = Result.new(eval_results)
-    local calc_result = result:calc_mean()
-
-    if not comp then
-        return tostring(calc_result)
-    else
-        return calc_result:get_grades(comp) or ""
-    end
-end
-
---------------------------------------------------------------------------------
---- Calculate the score corresponding to the result of the corresponding report.
---
--- If the report does not exist, try to calculate a score from the quarter
--- evaluations.
---
--- @param quarter (number) - the report quarter.
--- @return score (number)
---------------------------------------------------------------------------------
-function Student:calc_report_score (quarter, comp)
-    quarter = quarter and tonumber(quarter)
-    local result
-
-    if not self:report_exists(quarter) or not self.reports[quarter].result then
-        -- We must calculate the results first/
-        result = Result.new(self:calc_report_result(quarter))
-    else
-        result = self.reports[quarter].result
-    end
-
-    if comp then 
-        return result:calc_comp_score(comp)
-    else
-        return result:calc_score()
     end
 end
 
