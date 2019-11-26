@@ -66,6 +66,7 @@ local Eval_mt = {
 --      o.competency_mask (string)
 --      o.competency_score_mask (string)
 --      o.max_score (number)
+--      o.over_max (bool) - allow scores over the `max_score` if true.
 -- @return s (Eval)
 ----------------------------------------------------------------------------------
 function Eval.new (o)
@@ -89,6 +90,7 @@ function Eval.new (o)
     s.competency_mask         = o.competency_mask
     s.competency_score_mask   = o.competency_score_mask
     s.max_score               = tonumber(o.max_score)
+    s.over_max                = o.over_max and true or false
 
     return s
 end
@@ -102,6 +104,7 @@ end
 --      o.competency_mask (string)
 --      o.competency_score_mask (string)
 --      o.max_score (number)
+--      o.over_max (bool) - allow scores over the `max_score` if true.
 -- @return (bool) true if an update has been done, false otherwise.
 ----------------------------------------------------------------------------------
 function Eval.update (o)
@@ -136,6 +139,10 @@ function Eval.update (o)
         self.max_score = tonumber(o.max_score)
         update_done = true
     end
+    if o.over_max then
+        self.over_max = o.over_max and true or false
+        update_done = true
+    end
 
     return update_done
 end
@@ -153,6 +160,7 @@ function Eval:write (f)
     local competency_mask       = self:get_competency_mask()
     local competency_score_mask = self:get_competency_score_mask()
     local max_score             = self:get_max_score()
+    local over_max              = self:get_over_max()
 
     -- Open
 	f:write("evaluation_entry{\n\t")
@@ -181,6 +189,10 @@ function Eval:write (f)
         f:write(format("max_score = %q, ",             max_score))
         written_score = true
     end
+    if over_max then
+        f:write(format("over_max = %q, ",              over_max))
+        written_score = true
+    end
     if written_score then
         f:write("\n")
     end
@@ -200,6 +212,7 @@ function Eval:get_title ()                 return self.title end
 function Eval:get_competency_mask ()       return self.competency_mask end
 function Eval:get_competency_score_mask () return self.competency_score_mask end
 function Eval:get_max_score ()             return self.max_score end
+function Eval:get_over_max()               return self.over_max end
 
 
 --------------------------------------------------------------------------------
@@ -214,8 +227,9 @@ function Eval:plog ()
     plog("%s category: %q.",              prompt, self:get_category())
     plog("%s title: %q.",                 prompt, self:get_title())
     plog("%s competency_mask: %q.",       prompt, self:get_competency_mask())
-    plog("%s competency_score_mask: %q.", prompt, self:get_competency_mask())
+    plog("%s competency_score_mask: %q.", prompt, self:get_competency_score_mask())
     plog("%s max_score: %q.",             prompt, self:get_max_score())
+    plog("%s over_max: %q.",              prompt, self:get_over_max())
 end
 
 

@@ -39,6 +39,7 @@ local Student_mt = {__index = Student}
 --      o.name (string)
 --      o.class (string)
 --      o.place (number) *optional*
+--      o.increased_time (bool) *optional* PAP
 --      o.students (Student[]) - 
 --      o.evaluations (Eval[]) - 
 --      o.classes (table) - 
@@ -64,13 +65,14 @@ function Student.new (o)
     end
 
     -- Links to the student and evaluations lists in the database
-    s.db          = o.db
+    s.db             = o.db
 
     -- Main student attributes
-    s.lastname    = o.lastname
-    s.name        = o.name
-    s.class       = o.class
-    s.place       = tonumber(o.place)
+    s.lastname       = o.lastname
+    s.name           = o.name
+    s.class          = o.class
+    s.increased_time = o.increased_time and true or false
+    s.place          = tonumber(o.place)
 
     -- Create the evaluation results
     s.results = {}
@@ -79,7 +81,7 @@ function Student.new (o)
             local eval = nil
             local result = o.results[n]
             if result and type(result) == "table" then
-                eval = s.db:find_eval(result.number, class)
+                eval = s.db:find_eval(result.number, s.class)
             end
             -- Add the eval link to the result
             result.eval = eval
@@ -112,6 +114,7 @@ end
 --      o.name (string)
 --      o.class (string)
 --      o.place (number) *optional*
+--      o.increased_time (number) *optional* PAP
 --      o.students (Student[]) - 
 --      o.evaluations (Eval[]) - 
 --      o.classes (table) - 
@@ -122,22 +125,23 @@ function Student:update (o)
     local update_done = false
 
     -- Update valid non empty attributes
-    if o.lastname
-        and type(o.lastname) == "string"
+    if type(o.lastname) == "string"
         and string.match(o.lastname, "^%s*$") then
         self.lastname = tostring(o.lastname)
         update_done = true
     end
-    if o.name
-        and type(o.name) == "string"
+    if type(o.name) == "string"
         and string.match(o.name, "^%s*$") then
         self.name = tostring(o.name)
         update_done = true
     end
-    if o.class
-        and type(o.class) == "string"
+    if type(o.class) == "string"
         and string.match(o.class, "^%s*$") then
         self.class = tostring(o.class)
+        update_done = true
+    end
+    if type(o.increased_time) == "boolean" then
+        self.increased_time = tostring(o.increased_time)
         update_done = true
     end
     if tonumber(o.place) then
@@ -154,23 +158,27 @@ end
 -- @param f (file) - file (open for reading)
 --------------------------------------------------------------------------------
 function Student:write (f)
-    local format = string.format
-    local lastname, name = self:get_lastname(), self:get_name()
-    local class, place = self:get_class(), self:get_place()
-    local results, reports = self:get_results(), self:get_reports()
+    local place          = self:get_place()
+    local increased_time = self:get_increased_time()
+    local results        = self:get_results()
+    local reports        = self:get_reports()
 
     -- Open
 	f:write("student_entry{\n\t")
 
     -- Student attributes
-    f:write(format("lastname = %q, ",  lastname))
-    f:write(format("name = %q, ",      name))
-    f:write(format("class = %q, ",     class))
-    if self.place then
-        f:write(format("place = %q, ", place))
+    f:write(string.format("lastname = %q, ",           self:get_lastname()))
+    f:write(string.format("name = %q, ",               self:get_name()))
+    f:write(string.format("class = %q, ",              self:get_class()))
+    if place then
+        f:write(string.format("place = %q, ",          place))
+    end
+    if increased_time then
+        f:write("\n\t")
+        f:write(string.format("increased_time = %q, ", increased_time))
     end
     --f:write("\n\t"))
-    --f:write(format("special = %q, ",  self.special))
+    --f:write(string.format("special = %q, ",  self.special))
     f:write("\n")
 
 	-- Only print non empty results
@@ -187,9 +195,9 @@ function Student:write (f)
     if type(reports) == "table" and next(reports) then
         f:write("\treports = {\n")
         for i, report in ipairs(reports) do
-            f:write(format("\t\t{quarter = %q,\n", i))
-            f:write(format("\t\t\tresult = %q, ", tostring(report.result)))
-            f:write(format("score = %q},\n", report.score or nil))
+            f:write(string.format("\t\t{quarter = %q,\n", i))
+            f:write(string.format("\t\t\tresult = %q, ", tostring(report.result)))
+            f:write(string.format("score = %q},\n", report.score or nil))
         end
         f:write("\t},\n")
     end
@@ -202,12 +210,13 @@ end
 --------------------------------------------------------------------------------
 --- Return the student attributes
 --------------------------------------------------------------------------------
-function Student:get_lastname () return self.lastname end
-function Student:get_name ()     return self.name end
-function Student:get_class ()    return self.class end
-function Student:get_place ()    return self.place end
-function Student:get_results ()  return self.results end
-function Student:get_reports ()  return self.reports end
+function Student:get_lastname ()       return self.lastname end
+function Student:get_name ()           return self.name end
+function Student:get_class ()          return self.class end
+function Student:get_place ()          return self.place end
+function Student:get_increased_time () return self.increased_time end
+function Student:get_results ()        return self.results end
+function Student:get_reports ()        return self.reports end
 
 --------------------------------------------------------------------------------
 --- Returns the full name of a student.
@@ -311,16 +320,11 @@ end
 
 --- DEBUG
 -- TODO : à terminer
-function Student:print ()
-    print("Nom : ", self.lastname, "Prénom : ", self.name)
-    print("Classe : ", self.class)
-    print("Spécial : ", self.special)
-   --  for n = 1, #self.evaluations do
-   --      self.evaluations[n]:print()
-   --  end
-   --  for n = 1, #self.reports do
-   --      self.reports[n]:print()
-   --  end
+function Student:plog ()
+    local function plog (s, ...) print(string.format(s, ...)) end
+    local prompt = "tgc.student>"
+
+    plog("%s %q (%q)", prompt, self:get_fullname(), self:get_class())
 end
 
 

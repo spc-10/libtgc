@@ -76,8 +76,9 @@ function Result.new (o)
         return nil, msg
     end                                                                                                                                  
     -- Make sure the link to the database is ok
-    if not o.eval or type(o.eval ~= "table") then
+    if not o.eval or type(o.eval) ~= "table" then
         msg = "cannot create an eval result without a valid link to evaluations"
+        return nil, msg
     end
 
     -- Checks other attributes validity
@@ -150,8 +151,6 @@ function Result:write (f)
 
     -- Student attributes
     -- number is only used to find the corresponding eval when reading database
-    print("get_eval =  ", self:get_eval())
-    print("eval =  ", self.eval)
     f:write(format("\t\t{number = %q, ",  self:get_eval():get_number()))
     f:write(format("date = %q, ",         self:get_date()))
     f:write(format("quarter = %q, ",      self:get_quarter()))

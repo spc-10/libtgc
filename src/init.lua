@@ -1,81 +1,82 @@
---[[This module provides functions to handle evaluations by competences.
+--------------------------------------------------------------------------------
+-- ## TgC, A try to handle evaluation by competency.
+--
+-- Use a Lua database to manipulate students, evaluations and competencies… So
+-- this can easily be used inside ConTeXt or scripts.
+--
+-- Documentation uses [LDoc style](https://stevedonovan.github.io/ldoc/manual/doc.md.html).
+--
+-- @author Romain Diss
+-- @copyright 2019
+-- @license GNU/GPL
+-- @module tgc
 
-    Copyright (C) 2016 by Romain Diss
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program. If not, see <http://www.gnu.org/licenses/>.
---]]
-
-local database = require "tgc.database"
+-- local database = require "tgc.database"
 local student  = require "tgc.student"
 local eval     = require "tgc.eval"
 local utils    = require "tgc.utils"
 
--------------------------------------------------------------------------------
--- TgC version number.
+--- TgC main class.
+-- Set the default attributes and metatable.
+local Tgc = {
+    -- Version informations.
+    _AUTHOR           = "Romain Diss",
+    _COPYRIGHT        = "Copyright (c) 2019 Romain Diss",
+    _LICENSE          = "GNU/GPL",
+    _DESCRIPTION      = "A try to handle evaluation by competency",
+    _VERSION          = "TgC 0.0.2",
 
-_COPYRIGHT   = "Copyright (c) 2019 Romain Diss"
-_DESCRIPTION = "Tentative de Gestion des Compétences"
-_VERSION     = "TgC 0.0.2"
+    -- Database tables.
+    students          = {},
+    classes           = {},
+    evaluations       = {},
 
+    -- Other variables.
+    student_nb        = 0,
+    classes_nb        = 0,
+    evaluation_nb     = 0,
+}
 
---------------------------------------------------------------------------------
---- TGC CLASS
---
--- Contains everything needed to read, write and access the student database.
---------------------------------------------------------------------------------
+local Tgc_mt = {
+    __index           = Tgc,
+}
 
-local Tgc = {}
-local Tgc_mt = {__index = Tgc}
-
---------------------------------------------------------------------------------
---- Initializes a new student database.
--- @return o (Tgc)
---------------------------------------------------------------------------------
+--- Create a Tgc object.
+-- Used to store the databases and associated methods.
+-- @return a Tgc object.
 function Tgc.init ()
-    local o = setmetatable({}, Tgc_mt)
-    o.students, o.classes, o.evaluations = {}, {}, {}
-    o.student_nb, o.evaluation_nb = 0, 0
-    return o
+    return setmetatable({}, Tgc_mt)
 end
 
---------------------------------------------------------------------------------
---- Initializes a new student database.
---
--- @param filename (string) - the name of the database to load.
---                            Evaluations must be read first.
---------------------------------------------------------------------------------
+--- Loads the student database from a file.
+-- `evaluations` must be read first, then `students`.
+-- @string filename the name of the database to load.
+-- @return nothing in case of succes or `nil` and a message if the file cannot
+-- be open.
 function Tgc:load (filename)
-    -- Loads the students from the database file
-    local f = assert(io.open(filename, "r"))
+    -- Checks if the file can be open for reading.
+    f, msg = io.open(filename, "r")
+    if not f then
+        return f, msg
+    end
     f:close()
 
-    -- define constructors to read data
+    -- Define constructors to read data.
+    function entry (s) self:add_student(s) end -- for compatibility
     function student_entry (s) self:add_student(s) end
     function evaluation_entry (s) self:add_eval(s) end
+
+    -- Processes database file.
     dofile(filename)
 end
 
---------------------------------------------------------------------------------
---- Writes the database to the specified file.
---
--- @param filename (string) - the database file.
---------------------------------------------------------------------------------
+--- Writes the database in a file.
+-- @string filename the database file.
 function Tgc:write (filename)
     f, msg = io.open(filename, "w")
     if not f then return nil, msg end
 
-    -- Write evaluations first (needed to load student results)
+    -- Write evaluations first (needed to load student results).
     for _, e in pairs(self.evaluations) do
         e:write(f)
     end
@@ -85,43 +86,27 @@ function Tgc:write (filename)
     f:flush()
 end
 
---------------------------------------------------------------------------------
---- DEBUG function: print the database informations in a human readable way.
--- TODO
---------------------------------------------------------------------------------
-function Tgc:plog ()
-    local function plog (s, ...) print(string.format(s, ...)) end
-    local prompt = "tgc>"
-
-    plog("%s Number of students : %q.",    prompt, self.student_nb)
-    plog("%s Number of evaluations : %q.", prompt, self.evaluation_nb)
-end
-
---------------------------------------------------------------------------------
 --- Add a student to the database.
---
--- @param o (object) - the student attributes (see Student class)
---------------------------------------------------------------------------------
+-- @tab o the student attributes.
+-- @see Student
 function Tgc:add_student (o)
     o = o or {}
-    -- Add a link to the database
+    -- Add a link to the database.
     o.db = self
 
     local s = student.new(o)
     table.insert(self.students, s)
     self.student_nb = self.student_nb + 1
 
-    -- Add class to the database list
+    -- Add class to the database list.
     if not self:find_classes(o.class) then
         table.insert(self.classes, o.class)
     end
 end
 
---------------------------------------------------------------------------------
 --- Add an evaluation to the list of all the evaluation in the database.
---
--- @param o (object) - the eval attributes (see Eval class)
---------------------------------------------------------------------------------
+-- @tab o the eval attributes.
+-- @see Eval
 function Tgc:add_eval (o)
     o = o or {}
     local e = eval.new(o)
@@ -130,14 +115,10 @@ function Tgc:add_eval (o)
     self.evaluation_nb = self.evaluation_nb + 1
 end
 
---------------------------------------------------------------------------------
 --- Iterates over the ordered students.
---
 -- If a class pattern is given, the iterator only returns the students
--- belonging to this class.
---
--- @param class (string)
---------------------------------------------------------------------------------
+-- of this class.
+-- @string pattern a class pattern.
 function Tgc:next_student (pattern)
     local a, b = {}, {}
     pattern = tostring(pattern or ".*")
@@ -151,7 +132,7 @@ function Tgc:next_student (pattern)
             a[class .. lastname .. name] = idx
         end
     end
-    -- Next we store the date-lastname-name  in another table to sort them
+    -- Next we store the date-lastname-name in another table to sort them later.
     for k in next, a do
         b[#b + 1] = k
     end
@@ -162,22 +143,20 @@ function Tgc:next_student (pattern)
     -- student.
     local i = 1
     return function ()
-        local k = a[b[i]] -- this is the student id (sorted)
+        local k = a[b[i]] -- this is the student id (sorted).
         i = i + 1
 
         return self.students[k]
     end
 end
 
-----------------------------------------------------------------------------------
 --- Find the evaluation corresponding to a result.
--- Use the evaluation number and class pattern (from evaluation class) to find it.
---
--- @param number (number) -- evaluation number
--- @param class (string) -- class
--- @return (Eval) [, msg (string)] - Return nil and error message if arg ar not
---                                   valid.
-----------------------------------------------------------------------------------
+-- Use the evaluation number and class pattern (from evaluation class) to find
+-- it.
+-- @int number evaluation number.
+-- @string class
+-- @treturn Eval
+-- @return an Eval or `nil` and a message error if no Eval found.
 function Tgc:find_eval(number, class)
     local msg = nil
 
@@ -190,25 +169,20 @@ function Tgc:find_eval(number, class)
     for _, e in pairs(self.evaluations) do
         local pattern = e:get_class()
         if e:get_number() == number and string.find(class, pattern) then
-            return e, msg
+            return e
         end
     end
 end
 
-
---------------------------------------------------------------------------------
 --- Return the list of the classes in the database.
---
 -- The list is sorted in reverse alphabetic order.
---
--- @param pattern (string) - [optional] to filter classes. Default ".*"
--- @return classes[] (string) - the sorted table of matching classes (default: all).
---------------------------------------------------------------------------------
+-- @string[opt=".*"] pattern to filter classes.
+-- @return a table of the mathing classes (sorted). Default: all.
 function Tgc:find_classes (pattern)
     local tmp, classes = {}, {}
     pattern = tostring(pattern or ".*")
 
-    -- Sort ex
+    -- Sort ex.
     for _, class in pairs(self.classes) do
         if string.match(class, pattern) then
             tmp[#tmp + 1] = class
@@ -220,7 +194,7 @@ function Tgc:find_classes (pattern)
         table.insert(classes, class)
     end
 
-    -- Return nil if no class found
+    -- Return nil if no class found.
     if next(classes) then
         return classes
     else
@@ -228,21 +202,34 @@ function Tgc:find_classes (pattern)
     end
 end
 
---------------------------------------------------------------------------------
---- Return the number of students in a class
---
--- @param class (string)
--- @return nb_students (number)
---------------------------------------------------------------------------------
+--- Return the number of students in a class.
+-- @string class
+-- @return the number of students.
 function Tgc:get_student_number (class)
-    -- TODO
     local nb_students = 0
 
-    for s in self:next_student(class) do
+    for _ in self:next_student(class) do
         nb_students = nb_students + 1
     end
 
     return nb_students
 end
 
-return Tgc
+-- DEBUG function: print the database informations in a human readable way.
+-- TODO
+function Tgc:plog ()
+    local function plog (s, ...) print(string.format(s, ...)) end
+    local prompt = "tgc>"
+
+    for _, e in pairs(self.evaluations) do
+        e:plog()
+    end
+    for s in self:next_student() do
+        s:plog()
+    end
+
+    plog("%s Number of students : %q.",    prompt, self.student_nb)
+    plog("%s Number of evaluations : %q.", prompt, self.evaluation_nb)
+end
+
+return setmetatable({init = Tgc.init}, nil)

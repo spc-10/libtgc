@@ -2,8 +2,7 @@
 - [ ] `write()` : écrire d’abord dans un fichier temporaire puis recopier dans
   le fichier de notes (pour éviter de perdre des données).
 - [ ] Compléter le fichier `README.md`.
-- [ ] Basculer la gestion de la base de donnée (notamment les fonctions
-  `find_xxx()` dans le module `database.lua`.
+- [ ] Ramener tous les appels des bases de données à Tgc...
 
 ## Old todo
 - [ ] Use a config file in `$XDG_DATA_HOME`
