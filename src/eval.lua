@@ -218,18 +218,24 @@ function Eval:get_over_max()               return self.over_max end
 --------------------------------------------------------------------------------
 --- Print a summary of the evaluation
 --------------------------------------------------------------------------------
-function Eval:plog ()
+function Eval:plog (prompt)
     local function plog (s, ...) print(string.format(s, ...)) end
-    local prompt = "tgc.eval>"
+    if prompt then
+        prompt = prompt .. ".eval"
+    else
+        prompt = "eval"
+    end
 
-    plog("%s number: %q.",                prompt, self:get_number())
-    plog("%s class: %q.",                 prompt, self:get_class())
-    plog("%s category: %q.",              prompt, self:get_category())
-    plog("%s title: %q.",                 prompt, self:get_title())
-    plog("%s competency_mask: %q.",       prompt, self:get_competency_mask())
-    plog("%s competency_score_mask: %q.", prompt, self:get_competency_score_mask())
-    plog("%s max_score: %q.",             prompt, self:get_max_score())
-    plog("%s over_max: %q.",              prompt, self:get_over_max())
+    plog("%s> Evaluation nb %q (%q), cat. %q %q (%q) [%q] /%q (over: %q)",
+        prompt,
+        self:get_number(),
+        self:get_class(),
+        self:get_category(),
+        self:get_title(),
+        self:get_competency_mask(),
+        self:get_competency_score_mask(),
+        self:get_max_score(),
+        self:get_over_max())
 end
 
 

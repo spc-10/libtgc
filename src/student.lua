@@ -35,7 +35,7 @@ local Student_mt = {__index = Student}
 --- Creates a new student.
 --
 -- @param o (table) - table containing the student attributes.
---      o.lastname (string)                                                                                                              
+--      o.lastname (string)
 --      o.name (string)
 --      o.class (string)
 --      o.place (number) *optional*
@@ -60,12 +60,13 @@ function Student.new (o)
         return nil, msg
     end
     -- Make sure the link to the database is ok
-    if not o.db or type(o.db ~= "table") then
+    if not o.database or type(o.database ~= "table") then
         msg = "cannot create a student without a valid database link"
     end
 
-    -- Links to the student and evaluations lists in the database
-    s.db             = o.db
+    -- Link to the student and evaluations lists in the database. Don't know
+    -- how to access the find_*() function in an other way.
+    s.database       = o.database
 
     -- Main student attributes
     s.lastname       = o.lastname
@@ -81,7 +82,7 @@ function Student.new (o)
             local eval = nil
             local result = o.results[n]
             if result and type(result) == "table" then
-                eval = s.db:find_eval(result.number, s.class)
+                eval = s.database:find_eval(result.number, s.class)
             end
             -- Add the eval link to the result
             result.eval = eval
@@ -251,7 +252,7 @@ end
 --------------------------------------------------------------------------------
 function Student:add_result (o)
     local class = self:get_class()
-    local eval  = self.db:find_eval(o.number, class)
+    local eval  = self.database:find_eval(o.number, class)
 
     if not eval then return nil, "cannot add result: eval not found" end
 
@@ -320,11 +321,15 @@ end
 
 --- DEBUG
 -- TODO : à terminer
-function Student:plog ()
+function Student:plog (prompt)
     local function plog (s, ...) print(string.format(s, ...)) end
-    local prompt = "tgc.student>"
+    if prompt then
+        prompt = prompt .. ".student"
+    else
+        prompt = "student"
+    end
 
-    plog("%s %q (%q)", prompt, self:get_fullname(), self:get_class())
+    plog("%s> %q (%q)", prompt, self:get_fullname(), self:get_class())
 end
 
 

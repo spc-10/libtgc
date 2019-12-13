@@ -91,8 +91,9 @@ end
 -- @see Student
 function Tgc:add_student (o)
     o = o or {}
-    -- Add a link to the database.
-    o.db = self
+
+    -- Add a link to the database so we can use the `find_*()` functions.
+    o.database = self
 
     local s = student.new(o)
     table.insert(self.students, s)
@@ -217,19 +218,23 @@ end
 
 -- DEBUG function: print the database informations in a human readable way.
 -- TODO
-function Tgc:plog ()
+function Tgc:plog (prompt)
     local function plog (s, ...) print(string.format(s, ...)) end
-    local prompt = "tgc>"
+    if prompt then
+        prompt = prompt .. ".tgc"
+    else
+        prompt = "tgc"
+    end
 
     for _, e in pairs(self.evaluations) do
-        e:plog()
+        e:plog(prompt)
     end
     for s in self:next_student() do
-        s:plog()
+        s:plog(prompt)
     end
 
-    plog("%s Number of students : %q.",    prompt, self.student_nb)
-    plog("%s Number of evaluations : %q.", prompt, self.evaluation_nb)
+    plog("%s> Number of students : %q.",    prompt, self.student_nb)
+    plog("%s> Number of evaluations : %q.", prompt, self.evaluation_nb)
 end
 
 return setmetatable({init = Tgc.init}, nil)
