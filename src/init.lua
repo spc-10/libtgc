@@ -24,7 +24,7 @@ local Tgc = {
     _COPYRIGHT        = "Copyright (c) 2019 Romain Diss",
     _LICENSE          = "GNU/GPL",
     _DESCRIPTION      = "A try to handle evaluation by competency",
-    _VERSION          = "TgC 0.1.0",
+    _VERSION          = "TgC 0.2.0",
 
     -- Database tables.
     students          = {},
