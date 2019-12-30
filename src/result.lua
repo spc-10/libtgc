@@ -1,100 +1,69 @@
---[[This module provides functions to handle evaluation result.
+--------------------------------------------------------------------------------
+-- ## TgC eval module
+--
+-- @author Romain Diss
+-- @copyright 2019
+-- @license GNU/GPL (see COPYRIGHT file)
+-- @module result
 
-    Copyright (C) 2016 by Romain Diss
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program. If not, see <http://www.gnu.org/licenses/>.
---]]
-
-local utils   = require("tgc.utils")
+local Eval    = require "tgc.eval"
+local utils   = require "tgc.utils"
 local is_date_valid, is_quarter_valid = utils.is_date_valid, utils.is_quarter_valid
 
 
---------------------------------------------------------------------------------
---- Iterates over the ordered evaluations (for __pairs metatable).
---------------------------------------------------------------------------------
-local function _evalpairs (t)
-    local a, b = {}, {}
-
-    -- First we store the eval ids with associated date in a table
-    for k, v in next, t do
-        a[v.date] = k
-    end
-    -- Next we store the date in another table to sort them
-    for k in next, a do
-        b[#b + 1] = k
-    end
-    table.sort(b)
-
-    -- Now we can return an iterator which iterates over the sorted dates and
-    -- return the corresponding id and the corresponding eval.
-    local i = 1
-    return function ()
-        local k = a[b[i]] -- this is the eval id (sorted by date)
-        i = i + 1
-
-        return k, t[k]
-    end
-end
-
-local Result = {}
+--- Result class
+-- Sets default attributes and metatables.
+local Result = {
+    category = "standard", -- same as Eval's default TODO: use a common constant.
+}
 
 local Result_mt = {
     __index = Result,
-    __pairs = _evalpairs}
+}
 
-----------------------------------------------------------------------------------
+--- Compare two Results like `comp` in `table.sort`.
+-- Returns true if a < b considering the numerical order of `quarter`,
+-- numerical order of `number` and then alphabetic order of `category`.
+-- See also https://stackoverflow.com/questions/37092502/lua-table-sort-claims-invalid-order-function-for-sorting
+function Result_mt.__lt (a, b)
+    -- First compare class
+    if a.quarter and b.quarter and a.quarter < b.quarter then
+        return true
+    elseif a.quarter and b.quarter and a.quarter > b.quarter then
+        return false
+    -- then compare number
+    elseif a.number and b.number and a.number < b.number then
+        return true
+    elseif a.number and b.number and a.number > b.number then
+        return false
+    -- then compare category
+    elseif a.category and b.category and a.category < b.category then
+        return true
+    else
+        return false
+    end
+end
+
 --- Creates a new evaluation result.
---
 -- @param o (table) - table containing the evaluation result attributes.
---      o.eval (Eval) - link to the corresponding evaluation
 --      o.date (string) - formatted date ("%Y/%m/%d")
 --      o.quarter (number) - 1, 2 or 3
 --      o.competencies - list of competencies result MUST be adapted to the
 --                       eval competency_mask (no check here)
---      o.score (number) - score MUST correspond to the eval max_score (no
---                         check done here)
+--      o.score (number) - score (no verification against `max_score`)
 -- @return s (Result)
-----------------------------------------------------------------------------------
 function Result.new (o)
     local s = setmetatable({}, Result_mt)
-    local msg = nil
 
-    -- Make sure the result have an associated quarter
-    if not is_quarter_valid(o.quarter) then
-        msg = "cannot create an eval result without a valid quarter"
-        return nil, msg
-    end                                                                                                                                  
-    -- Make sure the link to the database is ok
-    if not o.eval or type(o.eval) ~= "table" then
-        msg = "cannot create an eval result without a valid link to evaluations"
-        return nil, msg
+    -- Checks attributes validity
+    if (not is_quarter_valid(o.quarter)) or (not tonumber(o.number)) then
+        return nil
     end
-
-    -- Checks other attributes validity
-    if not is_date_valid(o.date) then
-        o.date = nil
-    end
-    --if competencies then
-    --    -- TODO Check if competencies correspond to the mask
-    --end
-    --if score then
-    --    -- TODO Check if the score do not exceed the max_score
-    --end
 
     -- Assign attributes
-    s.eval                    = o.eval
-    s.date                    = o.date
+    s.number                  = tonumber(o.number)
+    s.category                = o.category
+    s.date                    = is_date_valid(o.date) and o.date or os.date("%Y/%m/%d")
     s.quarter                 = o.quarter
     s.competencies            = o.competencies
     s.score                   = tonumber(o.score)
@@ -102,15 +71,9 @@ function Result.new (o)
     return s
 end
 
-----------------------------------------------------------------------------------
 --- Update an existing evaluation result.
---
 -- @param o (table) - table containing the evaluation attributes to modify.
---      o.category (string)
---      o.title (string)
---      o.competencies_list (string)
---      o.competency_mask (string)
---      o.max_score (number)
+-- See Result.new()
 -- @return (bool) true if an update has been done, false otherwise.
 ----------------------------------------------------------------------------------
 function Result.update (o)
@@ -139,50 +102,54 @@ function Result.update (o)
     return update_done
 end
 
---------------------------------------------------------------------------------
 --- Write the evaluation result in a file.
---
 -- @param f (file) - file (open for reading)
---------------------------------------------------------------------------------
 function Result:write (f)
     local format = string.format
 
-    -- Open is done ont the Student:write() method
+    local number, category, quarter, date = self:get_infos()
+    local score                           = self:get_score_infos()
+    local competencies                    = self:get_competency_infos()
 
     -- Student attributes
     -- number is only used to find the corresponding eval when reading database
-    f:write(format("\t\t{number = %q, ",  self:get_eval():get_number()))
-    f:write(format("date = %q, ",         self:get_date()))
-    f:write(format("quarter = %q, ",      self:get_quarter()))
-    f:write(format("competencies = %q, ", self:get_competencies()))
-    f:write(format("score = %q, ",        self:get_score()))
+    f:write(format("\t\t{number = %q, ",  number))
+    f:write(format("category = %q, ",     category))
+    f:write(format("quarter = %q, ",      quarter))
+    f:write(format("date = %q, ",         date))
+    f:write(format("score = %q, ",        score))
+    f:write(format("competencies = %q, ", competencies))
 
     -- Close
 	f:write("},\n")
     f:flush()
 end
 
---------------------------------------------------------------------------------
 --- Return the eval result attributes.
---------------------------------------------------------------------------------
-function Result:get_eval ()         return self.eval end
-function Result:get_date ()         return self.date end
-function Result:get_quarter ()      return self.quarter end
-function Result:get_competencies () return self.competencies end
-function Result:get_score ()        return self.score end
+function Result:get_infos ()
+    return self.number, self.category, self.quarter, self.date
+end
+function Result:get_score_infos ()
+    return self.score
+end
+function Result:get_competency_infos ()
+    return self.competencies
+end
 
 --------------------------------------------------------------------------------
 --- Print a summary of the evaluation result
 --------------------------------------------------------------------------------
-function Result:plog ()
+function Result:plog (prompt)
     local function plog (s, ...) print(string.format(s, ...)) end
-    local prompt = "tgc.result>"
+    prompt = prompt and prompt .. ".result" or "result"
 
-    plog("%s date: %q.",                  prompt, self:get_date())
-    plog("%s quarter: %q.",               prompt, self:get_quarter())
-    plog("%s competencies: %q.",          prompt, self:get_competencies())
-    plog("%s score: %q.",                 prompt, self:get_score())
-    self:get_eval():plog()
+    local number, category, quarter, date = self:get_infos()
+    local score                           = self:get_score_infos()
+    local competencies                    = self:get_competency_infos()
+    plog("%s> Results for eval %s [%s], %s Q%d: %s / %s",
+        prompt,
+        number, category, date, quarter,
+        score, competencies)
 end
 
 

@@ -1,72 +1,72 @@
---[[This module provides functions to handle evaluations by competences.
-
-    Copyright (C) 2016 by Romain Diss
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program. If not, see <http://www.gnu.org/licenses/>.
---]]
-
-local Result    = require "tgc.result"
-local Eval      = require "tgc.eval"
---local find_eval = require "tgc".find_eval()
-
-
 --------------------------------------------------------------------------------
---- STUDENT CLASS
+-- ## TgC student module
 --
--- It contains all the information concerning the student.
---------------------------------------------------------------------------------
+-- @author Romain Diss
+-- @copyright 2019
+-- @license GNU/GPL (see COPYRIGHT file)
+-- @module student
+
+local Result   = require "tgc.result"
+local Eval     = require "tgc.eval"
+local utils    = require "tgc.utils"
+
+local strip_accents = utils.strip_accents
+table.binsert = utils.binsert
+
+--- Student class
+-- Sets metatables.
 
 local Student    = {}
-local Student_mt = {__index = Student}
+local Student_mt = {
+    __index = Student,
+}
 
+--- Compare two Students like `comp` in `table.sort`.
+-- Returns true if a < b considering the alphabetic order of `class`,
+-- `lastname` and then `name`.
+-- See also https://stackoverflow.com/questions/37092502/lua-table-sort-claims-invalid-order-function-for-sorting
+function Student_mt.__lt (a, b)
+    -- First compare class
+    if a.class and b.class and a.class < b.class then
+        return true
+    elseif a.class and b.class and a.class > b.class then
+        return false
+    -- then compare lastnames (whithout accents)
+    elseif a.lastname and b.lastname
+        and strip_accents(a.lastname) < strip_accents(b.lastname) then
+        return true
+    elseif a.lastname and b.lastname
+        and strip_accents(a.lastname) > strip_accents(b.lastname) then
+        return false
+    -- then compare names (whithout accents)
+    elseif a.name and b.name
+        and strip_accents(a.name) < strip_accents(b.name) then
+        return true
+    else
+        return false
+    end
+end
 
-----------------------------------------------------------------------------------
 --- Creates a new student.
---
 -- @param o (table) - table containing the student attributes.
 --      o.lastname (string)
 --      o.name (string)
 --      o.class (string)
 --      o.place (number) *optional*
 --      o.increased_time (bool) *optional* PAP
---      o.students (Student[]) - 
---      o.evaluations (Eval[]) - 
---      o.classes (table) - 
---      o.results (Result[]) - 
---      o.reports (Report[]) - 
--- @return s (Student), [msg (string)] - Return nil, msg if invalid attributes.
-----------------------------------------------------------------------------------
+--      o.results (Result[]) -
+--      o.reports (Report[]) -
+-- @return s (Student) or nil if parameters are incorrect.
 function Student.new (o)
     local s = setmetatable({}, Student_mt)
-    local msg = nil
 
     -- Make sure the student get non empty name, lastname and class!
-    if not o.lastname or not o.name or not o.class 
+    if not o.lastname or not o.name or not o.class
         or string.find(o.lastname, "^%s*$")
         or string.find(o.name, "^%s*$")
         or string.find(o.class, "^%s*$") then
-        msg = "cannot create a student without lastname, name or class"
-        return nil, msg
+        return nil
     end
-    -- Make sure the link to the database is ok
-    if not o.database or type(o.database ~= "table") then
-        msg = "cannot create a student without a valid database link"
-    end
-
-    -- Link to the student and evaluations lists in the database. Don't know
-    -- how to access the find_*() function in an other way.
-    s.database       = o.database
 
     -- Main student attributes
     s.lastname       = o.lastname
@@ -79,15 +79,7 @@ function Student.new (o)
     s.results = {}
     if o.results and type(o.results) == "table" then
         for n = 1, #o.results do
-            local eval = nil
-            local result = o.results[n]
-            if result and type(result) == "table" then
-                eval = s.database:find_eval(result.number, s.class)
-            end
-            -- Add the eval link to the result
-            result.eval = eval
-            -- Insert the new result
-            table.insert(s.results, Result.new(result))
+            table.binsert(s.results, Result.new(o.results[n]))
         end
     end
 
@@ -104,23 +96,13 @@ function Student.new (o)
         end
     end
 
-    return s, msg
+    return s
 end
 
---------------------------------------------------------------------------------
---- Update an existing student 
---
+--- Update an existing student
 -- @param o (table) - table containing the student attributes.
---      o.lastname (string)                                                                                                              
---      o.name (string)
---      o.class (string)
---      o.place (number) *optional*
---      o.increased_time (number) *optional* PAP
---      o.students (Student[]) - 
---      o.evaluations (Eval[]) - 
---      o.classes (table) - 
+-- See Student.new()
 -- @return (bool) - true if an attribute has been updated
---------------------------------------------------------------------------------
 function Student:update (o)
     o = o or {}
     local update_done = false
@@ -153,24 +135,20 @@ function Student:update (o)
     return update_done
 end
 
---------------------------------------------------------------------------------
 --- Write the database in a file.
---
--- @param f (file) - file (open for reading)
---------------------------------------------------------------------------------
+-- @param f (file) - file (open for writing)
 function Student:write (f)
-    local place          = self:get_place()
-    local increased_time = self:get_increased_time()
-    local results        = self:get_results()
-    local reports        = self:get_reports()
+    local lastname, name, class, increased_time, place = self:get_infos()
+    local results        = self.results or {}
+    local reports        = self.reports or {}
 
-    -- Open
+    -- Opening
 	f:write("student_entry{\n\t")
 
     -- Student attributes
-    f:write(string.format("lastname = %q, ",           self:get_lastname()))
-    f:write(string.format("name = %q, ",               self:get_name()))
-    f:write(string.format("class = %q, ",              self:get_class()))
+    f:write(string.format("lastname = %q, ",           lastname))
+    f:write(string.format("name = %q, ",               name))
+    f:write(string.format("class = %q, ",              class))
     if place then
         f:write(string.format("place = %q, ",          place))
     end
@@ -178,14 +156,12 @@ function Student:write (f)
         f:write("\n\t")
         f:write(string.format("increased_time = %q, ", increased_time))
     end
-    --f:write("\n\t"))
-    --f:write(string.format("special = %q, ",  self.special))
     f:write("\n")
 
 	-- Only print non empty results
-    if type(results) == "table" and next(results) then
+    if next(results) then
         f:write("\tresults = {\n")
-        for _, result in pairs(self:get_results()) do
+        for _, result in pairs(self.results) do
             result:write(f)
         end
         f:write("\t},\n")
@@ -193,7 +169,7 @@ function Student:write (f)
 
 	-- Reports
     -- TODO
-    if type(reports) == "table" and next(reports) then
+    if next(reports) then
         f:write("\treports = {\n")
         for i, report in ipairs(reports) do
             f:write(string.format("\t\t{quarter = %q,\n", i))
@@ -208,128 +184,44 @@ function Student:write (f)
     f:flush()
 end
 
---------------------------------------------------------------------------------
---- Return the student attributes
---------------------------------------------------------------------------------
-function Student:get_lastname ()       return self.lastname end
-function Student:get_name ()           return self.name end
-function Student:get_class ()          return self.class end
-function Student:get_place ()          return self.place end
-function Student:get_increased_time () return self.increased_time end
-function Student:get_results ()        return self.results end
-function Student:get_reports ()        return self.reports end
-
---------------------------------------------------------------------------------
---- Returns the full name of a student.
---
--- @param options (table) - [optional] options to format the name.
---      - options.reverse (bool)
--- @return fullname (string)
---------------------------------------------------------------------------------
-function Student:get_fullname (options)
-    options = options or {}
-    local reverse = options.reverse or false
-    local sep = " "
-
-    if reverse then
-        return self.name .. sep .. self.lastname
-    else
-        return self.lastname .. sep .. self.name
-    end
+--- Returns the student informations.
+function Student:get_infos ()
+    return self.lastname, self.name, self.class, self.increased_time, self.place
 end
 
---------------------------------------------------------------------------------
---
--- EVALUATIONS
---
---------------------------------------------------------------------------------
+--- TODO: eval and reports getters...
+--function Student:get_results ()        return self.results end
+--function Student:get_reports ()        return self.reports end
+
 
 --------------------------------------------------------------------------------
---- Add an evaluation result in the student corresponding list.
---
+-- Results part
+
+--- Add an evaluation result in the student's corresponding list.
 -- @param o (table) - the evaluation result attributes.
--- @return nil, msg if no result is added.
---------------------------------------------------------------------------------
+-- @return Result (or nil if no result is added).
 function Student:add_result (o)
-    local class = self:get_class()
-    local eval  = self.database:find_eval(o.number, class)
-
-    if not eval then return nil, "cannot add result: eval not found" end
-
-    -- add the eval link to the result
-    o.eval = eval
-    -- create the result
     local new = Result.new(o)
-    table.insert(self.results, new)
+    table.binsert(self.results, Result.new(o))
     return new
 end
 
 --------------------------------------------------------------------------------
---- Iterates over the eval ids of the student.
---
--- @param quarter (number) - [optional] the quarter (all if nil)
---------------------------------------------------------------------------------
-function Student:next_result (quarter)
-    quarter = tonumber(quarter) or nil
-    local a, b = {}, {}
+-- Debug stuff
 
-    -- First we store the eval ids with associated date in a table
-    for id, eval in next, self.evaluations do
-        if not quarter or eval.quarter == quarter then
-            a[eval.date] = id
-        end
-    end 
-    -- Next we store the date in another table to sort them
-    for date in next, a do
-        b[#b + 1] = date
-    end
-    table.sort(b)
-
-    -- Now we can return an iterator which iterates over the sorted dates and
-    -- return the corresponding id and the corresponding eval.
-    local i = 1
-    return function ()
-        local k = a[b[i]] -- this is the eval id (sorted by date)
-        i = i + 1
-
-        return k, self.evaluations[k]
-    end
-end
-
-----------------------------------------------------------------------------------
---- Return a result that sums the results of all the corresponding evals.
---
--- @param quarter (number)
--- @return result (string)
--- TODO
-----------------------------------------------------------------------------------
-function Student:sum_eval_results (quarter, comp)
-    quarter = quarter and tonumber(quarter)
-    local result = Result.new()
-    for _, eval in pairs(self.evaluations) do -- __pairs should sort this
-        if not quarter or eval.quarter == quarter then
-            result = result + eval.result
-        end
-    end
-
-    if comp and result:get_grades(comp) then
-        return comp .. result:get_grades(comp)
-    else
-        return tostring(result)
-    end
-end
-
---- DEBUG
--- TODO : à terminer
+--- Prints the database informations in a human readable way.
 function Student:plog (prompt)
     local function plog (s, ...) print(string.format(s, ...)) end
-    if prompt then
-        prompt = prompt .. ".student"
-    else
-        prompt = "student"
-    end
+    prompt = prompt and prompt .. ".student" or "student"
 
-    plog("%s> %q (%q)", prompt, self:get_fullname(), self:get_class())
+    local lastname, name, class, increased_time, place = self:get_infos()
+    plog("%s> Name: %s %s, %s (place: %2s, time+: %s)",
+        prompt,
+        lastname, name, class, place, increased_time and "yes" or "no")
+
+    for _, r in ipairs(self.results) do
+        r:plog(prompt)
+    end
 end
 
 

@@ -2,8 +2,8 @@
 - [ ] `write()` : écrire d’abord dans un fichier temporaire puis recopier dans
   le fichier de notes (pour éviter de perdre des données).
 - [ ] Compléter le fichier `README.md`.
-- [ ] Ramener tous les appels des bases de données à Tgc...
-- [ ] Use `table.foreachi` and `table.sort` to Students and Evals traversal.
+- [X] Ramener tous les appels des bases de données à Tgc...
+- [X] Use `pairs()` and `table.sort` to Students and Evals traversal.
 
 ## Old todo
 - [ ] Use a config file in `$XDG_DATA_HOME`

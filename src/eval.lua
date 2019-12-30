@@ -1,63 +1,47 @@
---[[This module provides functions to handle evaluations.
-
-    Copyright (C) 2016 by Romain Diss
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program. If not, see <http://www.gnu.org/licenses/>.
---]]
-
 --------------------------------------------------------------------------------
---- Iterates over the ordered evaluations (for __pairs metatable).
---------------------------------------------------------------------------------
-local function _evalpairs (t)
-    local a, b = {}, {}
-
-    -- First we store the eval ids with associated date in a table
-    for k, v in next, t do
-        a[v.date] = k
-    end
-    -- Next we store the date in another table to sort them
-    for k in next, a do
-        b[#b + 1] = k
-    end
-    table.sort(b)
-
-    -- Now we can return an iterator which iterates over the sorted dates and
-    -- return the corresponding id and the corresponding eval.
-    local i = 1
-    return function ()
-        local k = a[b[i]] -- this is the eval id (sorted by date)
-        i = i + 1
-
-        return k, t[k]
-    end
-end
-
---------------------------------------------------------------------------------
---- EVALUATION CLASS
+-- ## TgC eval module
 --
--- It contains all the information concerning the evaluations.
---------------------------------------------------------------------------------
+-- @author Romain Diss
+-- @copyright 2019
+-- @license GNU/GPL (see COPYRIGHT file)
+-- @module eval
 
-local Eval = {}
+--- Evaluation class
+-- Sets default attributes and metatables.
+local Eval = {
+    category  = "standard",
+    max_score = 10,
+    over_max  = false,
+}
 
 local Eval_mt = {
     __index = Eval,
-    __pairs = _evalpairs}
+}
 
-----------------------------------------------------------------------------------
+--- Compare two Evals like `comp` in `table.sort`.
+-- Returns true if a < b considering the alphabetic order of `class`,
+-- numerical order of `number` and then alphabetic order of `category`.
+-- See also https://stackoverflow.com/questions/37092502/lua-table-sort-claims-invalid-order-function-for-sorting
+function Eval_mt.__lt (a, b)
+    -- First compare class
+    if a.class and b.class and a.class < b.class then
+        return true
+    elseif a.class and b.class and a.class > b.class then
+        return false
+    -- then compare number
+    elseif a.number and b.number and a.number < b.number then
+        return true
+    elseif a.number and b.number and a.number > b.number then
+        return false
+    -- then compare category
+    elseif a.category and b.category and a.category < b.category then
+        return true
+    else
+        return false
+    end
+end
+
 --- Creates a new evaluation.
---
 -- @param o (table) - table containing the evaluation attributes.
 --      o.number (number) - evaluation number
 --      o.class (string) - a class name or a class pattern
@@ -68,19 +52,13 @@ local Eval_mt = {
 --      o.max_score (number)
 --      o.over_max (bool) - allow scores over the `max_score` if true.
 -- @return s (Eval)
-----------------------------------------------------------------------------------
 function Eval.new (o)
     local s = setmetatable({}, Eval_mt)
-    local msg = nil
 
     -- Make sure number and class are non empty fields
     if not tonumber(o.number) or not o.class or string.match(o.class, "^%s*$") then
-        msg = "cannot create an eval without valid number or class"
-        return ni, msg
+        return nil
     end
-
-    -- Checks other attributes validity
-    -- TODO category, masks
 
     -- Assign attributes
     s.number                  = tonumber(o.number)
@@ -95,42 +73,31 @@ function Eval.new (o)
     return s
 end
 
-----------------------------------------------------------------------------------
 --- Update an existing evaluation.
---
 -- @param o (table) - table containing the evaluation attributes to modify.
---      o.category (string)
---      o.title (string)
---      o.competency_mask (string)
---      o.competency_score_mask (string)
---      o.max_score (number)
---      o.over_max (bool) - allow scores over the `max_score` if true.
+-- See Eval.new() for attributes.
 -- @return (bool) true if an update has been done, false otherwise.
-----------------------------------------------------------------------------------
 function Eval.update (o)
+    o = o or {}
     local update_done = false
 
     -- Update valid non empty attributes
-    if o.category
-        and type(o.category) == "string"
+    if type(o.category) == "string"
         and not string.match(o.category, "^%s*") then
         self.category = o.category
         update_done = true
     end
-    if o.title
-        and type(o.title) == "string"
+    if type(o.title) == "string"
         and not string.match(o.title, "^%s*") then
         self.title = o.title
         update_done = true
     end
-    if o.competency_mask
-        and type(o.competency_mask) == "string"
+    if type(o.competency_mask) == "string"
         and not string.match(o.competency_mask, "^%s*") then
         self.competency_mask = o.competency_mask
         update_done = true
     end
-    if o.competency_score_mask
-        and type(o.competency_score_mask) == "string"
+    if type(o.competency_score_mask) == "string"
         and not string.match(o.competency_score_mask, "^%s*") then
         self.competency_score_mask = o.competency_score_mask
         update_done = true
@@ -147,20 +114,14 @@ function Eval.update (o)
     return update_done
 end
 
---------------------------------------------------------------------------------
 --- Write the evaluation in a file.
---
--- @param f (file) - file (open for reading)
---------------------------------------------------------------------------------
+-- @param f (file) - file (open for writing)
 function Eval:write (f)
     local format = string.format
 
-    local number, class         = self:get_number(), self:get_class()
-    local category, title       = self:get_category(), self:get_title()
-    local competency_mask       = self:get_competency_mask()
-    local competency_score_mask = self:get_competency_score_mask()
-    local max_score             = self:get_max_score()
-    local over_max              = self:get_over_max()
+    local number, category, class, title         = self:get_infos()
+    local max_score, over_max                    = self:get_score_infos()
+    local competency_mask, competency_score_mask = self:get_competency_infos()
 
     -- Open
 	f:write("evaluation_entry{\n\t")
@@ -202,40 +163,35 @@ function Eval:write (f)
     f:flush()
 end
 
---------------------------------------------------------------------------------
---- Return the eval attributes.
---------------------------------------------------------------------------------
-function Eval:get_number ()                return self.number end
-function Eval:get_class ()                 return self.class end
-function Eval:get_category ()              return self.category end
-function Eval:get_title ()                 return self.title end
-function Eval:get_competency_mask ()       return self.competency_mask end
-function Eval:get_competency_score_mask () return self.competency_score_mask end
-function Eval:get_max_score ()             return self.max_score end
-function Eval:get_over_max()               return self.over_max end
+--- Returns the evaluation's main informations.
+function Eval:get_infos ()
+    return self.number, self.category, self.class, self.title
+end
+--- Returns the evaluation's score informations.
+function Eval:get_score_infos ()
+    return self.max_score, self.over_max
+end
+--- Returns the evaluation's competency informations.
+function Eval:get_competency_infos ()
+    return self.competency_mask, self.competency_score_mask
+end
 
+--------------------------------------------------------------------------------
+-- Debug stuff
 
---------------------------------------------------------------------------------
---- Print a summary of the evaluation
---------------------------------------------------------------------------------
+--- Prints the database informations in a human readable way.
 function Eval:plog (prompt)
     local function plog (s, ...) print(string.format(s, ...)) end
-    if prompt then
-        prompt = prompt .. ".eval"
-    else
-        prompt = "eval"
-    end
+    prompt = prompt and prompt .. ".eval" or "eval"
 
-    plog("%s> Evaluation nb %q (%q), cat. %q %q (%q) [%q] /%q (over: %q)",
+    local number, category, class, title         = self:get_infos()
+    local max_score, over_max                    = self:get_score_infos()
+    local competency_mask, competency_score_mask = self:get_competency_infos()
+    plog("%s> Eval. n. %2d (%s), cat. %s %q (%s) [%s] /%d%s",
         prompt,
-        self:get_number(),
-        self:get_class(),
-        self:get_category(),
-        self:get_title(),
-        self:get_competency_mask(),
-        self:get_competency_score_mask(),
-        self:get_max_score(),
-        self:get_over_max())
+        number, class, category, title,
+        competency_mask, competency_score_mask,
+        max_score, over_max and "[+]" or "")
 end
 
 

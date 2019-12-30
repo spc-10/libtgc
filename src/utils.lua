@@ -33,6 +33,35 @@ function _M.strip_accents (str)
     return normalized_str
 end
 
+--- Binary insertion.
+-- Does a binary insertion of a given value into the table
+-- See: http://lua-users.org/wiki/BinaryInsert
+-- @param list
+-- @param value to insert
+-- @param comp[opt] comparison function (default < operator)
+function _M.binsert(list, value, comp)
+    -- Initialise compare function
+    local comp = comp or function(a, b) return a < b end
+
+    --  Initialise numbers
+    local istart, iend, imid, istate = 1, #list, 1, 0
+
+    -- Get insert position
+    while istart <= iend do
+        -- calculate middle
+        imid = math.floor((istart + iend) / 2)
+        -- compare
+        if comp(value, list[imid]) then
+            iend, istate = imid - 1, 0
+        else
+            istart, istate = imid + 1, 1
+        end
+    end
+
+    table.insert(list, (imid + istate), value)
+    return (imid + istate)
+end
+
 --------------------------------------------------------------------------------
 --- Checks if a date is valid
 --  @param date (string) - "%Y/%m/%d" see C strftime()
