@@ -2,6 +2,7 @@ local tgc = require "tgc"
 
 local names, lastnames = {}, {}
 local categories = {"test", "qcm", "final", "homework", "experimental"}
+local genders   = {"f", "m"}
 
 -- Reads a database line by line.
 local function read_lines (filename)
@@ -22,10 +23,22 @@ local function true_or_false ()
 end
 
 -- Generates a random class.
--- TODO: Handle groups.
-local function random_class ()
+-- @param group_freq add a group with an 1/group_freq frequency
+local function random_class (group_freq)
     local level, number = math.random(3, 5), math.random(9)
     return level .. "e" .. number
+end
+
+-- Generates a random group.
+-- @param freq add a group with an 1/freq frequency
+local function random_group (freq)
+    local level, number = math.random(3, 5), math.random(9)
+
+    if math.random(freq) == freq then
+        return "group" .. math.random(1, 9)
+    else
+        return nill
+    end
 end
 
 -- Generates a random evaluation category.
@@ -62,25 +75,43 @@ tgc = tgc.init()
 print(tgc._VERSION)
 
 local N = 20
-print(string.format("Adding %d new students...", N))
+print(string.format("\nAdding %d new students...", N))
 for i = 1, N do
     local name     = string.gsub(names[math.random(#names)], "^%a", string.upper)
     local lastname = string.gsub(lastnames[math.random(#lastnames)], "^%a", string.upper)
+    local gender   = genders[math.random(1,2)]
     local class    = random_class()
+    local group    = random_group(3)
     local place    = random_place(3)
-    local increased_time = true_or_false()
+    local increased_time = math.random() + 1
 
     --print(lastname, name, class)
     tgc:add_student({
         lastname       = lastname,
         name           = name,
+        gender         = gender,
         class          = class,
+        group          = group,
         place          = place,
         increased_time = increased_time})
+
+    -- print the student infos
+         io.write(string.format("%12s %12s" , lastname, name))
+         if string.match(gender, "[fF]") then
+             io.write(string.format(" (%s)", "♀"))
+         else
+             io.write(string.format(" (%s)", "♂"))
+         end
+         io.write(string.format("\tclass: %6s", class))
+         io.write(string.format(" (group: %10s)", group))
+         io.write(string.format("\tplace: %s", place))
+         if increased_time then
+             io.write(string.format("\t[time × %.1f]\n", increased_time))
+         end
 end
 
 local M = 20
-print(string.format("Adding %d new evaluations...", M))
+print(string.format("\nAdding %d new evaluations...", M))
 for i = 1, M do
     local number    = i
     local class     = random_class()
@@ -103,7 +134,7 @@ for i = 1, M do
         max_score = max_score,
         over_max = over_max})
 
-    print(string.format("Adding results for students belonging to %s", class))
+    print(string.format("\nAdding results for students belonging to %s", class))
     for sid in tgc:next_student(class) do
         tgc:add_student_result(sid, {
             number = number,
@@ -115,7 +146,7 @@ for i = 1, M do
     end
 end
 
-print("Adding categories rules...")
+print("\nAdding categories rules...")
 local categories = tgc:get_eval_categories_list()
 for _, category in ipairs(categories) do
     tgc:add_category_rule({
@@ -128,39 +159,54 @@ end
 
 --------------------------------------------------------------------------------
 
-print("\nFinding students...")
-print("By Lastnames...")
+print("\nFinding students by lastnames...")
 for i = 1, #lastnames do
     local lastname_p = string.gsub(lastnames[i], "^%a", string.upper)
     -- io.write(lastname_p .. " ")
     local sid = tgc:find_student(lastname_p)
     if sid then
-        local lastname, name = tgc:get_student_infos(sid)
-        io.write(string.format("Found: %d - %s %s\n", sid, lastname, name))
+        local lastname, name = tgc:get_student_name(sid)
+        local gender = tgc:get_student_gender(sid)
+        io.write(string.format("Found: %d - %s %s (%s) for pattern \"%s\"\n", sid, lastname, name, gender, lastname_p))
     end
 end
 
-print("By Names...")
+print("\nFinding students by Names...")
 for i = 1, #names do
     local name_p = string.gsub(names[i], "^%a", string.upper)
     -- io.write(lastname_p .. " ")
     local sid = tgc:find_student("*", name_p)
     if sid then
-        local lastname, name = tgc:get_student_infos(sid)
-        io.write(string.format("Found: %d - %s %s\n", sid, lastname, name))
+        local lastname, name = tgc:get_student_name(sid)
+        local gender = tgc:get_student_gender(sid)
+        local class, group = tgc:get_student_class(sid)
+        io.write(string.format("Found: %d - %s %s (%s), %s g: %s for pattern \"%s\"\n", sid, lastname, name, gender, class, group, name_p))
     end
 end
 
-print("By Class...")
+print("\nFinding students by Class...")
 for level = 3, 5 do
-    for number = 1, 9 do
-        local class_p = level .. "e" .. number
-        -- io.write(lastname_p .. " ")
-        local sid = tgc:find_student("*", "*", class_p)
-        if sid then
-            local lastname, name, class = tgc:get_student_infos(sid)
-            io.write(string.format("Found: %d - %s %s, %s\n", sid, lastname, name, class))
-        end
+    local class_p = level .. "e.*"
+    -- io.write(lastname_p .. " ")
+    local sid = tgc:find_student("*", "*", class_p)
+    if sid then
+        local lastname, name = tgc:get_student_name(sid)
+        local gender = tgc:get_student_gender(sid)
+        local class, group = tgc:get_student_class(sid)
+        io.write(string.format("Found: %d - %s %s (%s), %s g: %s for pattern \"%s\"\n", sid, lastname, name, gender, class, group, class_p))
+    end
+end
+
+print("\nFinding students by Group...")
+for i = 1, 20 do
+    local group_p = random_group(1)
+    -- io.write(lastname_p .. " ")
+    local sid = tgc:find_student("*", "*", group_p)
+    if sid then
+        local lastname, name = tgc:get_student_name(sid)
+        local gender = tgc:get_student_gender(sid)
+        local class, group = tgc:get_student_class(sid)
+        io.write(string.format("Found: %d - %s %s (%s), %s, g: %s for pattern \"%s\"\n", sid, lastname, name, gender, class, group, group_p))
     end
 end
 

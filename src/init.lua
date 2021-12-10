@@ -16,7 +16,8 @@ local utils         = require "tgc.utils"
 
 table.binsert = utils.binsert
 
---- TgC main class.
+--------------------------------------------------------------------------------
+-- TgC main class.
 -- Set the default attributes and metatable.
 local Tgc = {
     -- Version informations.
@@ -37,15 +38,17 @@ local Tgc_mt = {
     __index           = Tgc,
 }
 
---- Create a Tgc object.
+--------------------------------------------------------------------------------
+-- Create a Tgc object.
 function Tgc.init ()
     return setmetatable({}, Tgc_mt)
 end
 
---- Loads the student database from a file.
--- @string filename the name of the database to load.
+--------------------------------------------------------------------------------
+-- Loads the student database from a file.
+-- @param filename the name of the database to load
 -- @return nothing in case of succes or `nil` and a message if the file cannot
--- be open.
+-- be open
 function Tgc:load (filename)
     -- Checks if the file can be open for reading.
     f, msg = io.open(filename, "r")
@@ -65,8 +68,9 @@ function Tgc:load (filename)
     table.sort(self.students)
 end
 
---- Writes the database in a file.
--- @string filename the database file.
+--------------------------------------------------------------------------------
+-- Writes the database in a file.
+-- @param filename the database filename
 function Tgc:write (filename)
     f, msg = io.open(filename, "w")
     if not f then return nil, msg end
@@ -84,35 +88,39 @@ function Tgc:write (filename)
 end
 
 --------------------------------------------------------------------------------
---- Students stuff.
+-- Students stuff.
 -- This is an interface to the Student module. The user do not access to the
 -- student class. She can only get an acces to the student index.
 -- Warning: if one adds or removes a student, the indexes are changed!
+-- @section students
+--------------------------------------------------------------------------------
 
 
---- Iterator that traverses students belonging to a class pattern.
+--------------------------------------------------------------------------------
+-- Iterator that traverses students belonging to a class pattern.
+-- The pattern is also searched in 'groups'.
 -- One can iterates over all students with:
 -- `for sid in tgc:next_student() do ... end`
+-- @param class_p the class pattern
 function Tgc:next_student (class_p)
-    class_p = (type(class_p) == "string") and class_p or ".*"
-
     local sid = 0
     return function ()
         repeat
             sid = sid + 1
             local s = self.students[sid]
             if not s then return nil end
-            local _, _, class = s:get_infos()
-        until string.match(class, class_p)
+            local class, group = s.class, s.group
+        until s:is_in_class(class_p)
         return sid
     end
 end
 
---- Adds a new student to the database.
+--------------------------------------------------------------------------------
+-- Adds a new student to the database.
 -- Uses a binary insertion so the `students` table is always sorted.
 -- Also increments the students number and insert the student's class to the
 -- database.
--- @param o the student attributes (see Student class).
+-- @param o the student attributes (see Student class)
 function Tgc:add_student (o)
     o = o or {}
 
@@ -125,22 +133,25 @@ function Tgc:add_student (o)
     end
 end
 
---- Removes a student from the database.
--- @number sid the index of the student to remove.
+--------------------------------------------------------------------------------
+-- Removes a student from the database.
+-- @param sid the index of the student to remove
 function Tgc:remove_student (sid)
     if self.students[sid] then
         table.remove(self.students, sid)
     end
 end
 
---- Finds a student.
+--------------------------------------------------------------------------------
+-- Finds a student.
 -- Warning: in case of multiple matchings, the function only returns the first
 -- match.
 -- One can use "*" as special pattern to match everything (shortcut for ".*").
--- @string lastname_p[opt=".*"] lastname pattern
--- @string name_p[opt=".*"] name pattern
--- @string class_p[opt=".*"] class pattern
--- @return the index of the student.
+-- @param lastname_p[opt=".*"] lastname pattern
+-- @param name_p[opt=".*"] name pattern
+-- @param class_p[opt=".*"] class pattern
+-- @return the index of the student
+-- @fixme replace string.match by a method in student class
 function Tgc:find_student(lastname_p, name_p, class_p)
     -- Check if arguments are valid
     if not lastname_p and not name_p and not class_p then
@@ -152,10 +163,9 @@ function Tgc:find_student(lastname_p, name_p, class_p)
     if not class_p or class_p == "*" then class_p = ".*" end
 
     for sid, s in ipairs(self.students) do
-        local lastname, name, class = s:get_infos()
-        if string.match(lastname,lastname_p)
-            and string.match(name,name_p)
-            and string.match(class,class_p) then
+        if string.match(s.lastname,lastname_p)
+            and string.match(s.name,name_p)
+            and s:is_in_class(class_p) then
             return sid
         end
     end
@@ -163,21 +173,85 @@ function Tgc:find_student(lastname_p, name_p, class_p)
     return nil -- not found.
 end
 
---- Gets the students parameters.
+--------------------------------------------------------------------------------
+-- Gets the students parameters. XXX DEPRECATED
 -- Returns `nil` if the index is not correct.
--- See Student:get_infos()
--- @number sid the student index.
+-- See Student
+-- @param sid the student index
 -- @return lastname, name, class, increased_time, place
 function Tgc:get_student_infos (sid)
     local s = self.students[sid]
 
-    if s then return s:get_infos()
+    if s then return s.lastname, s.name, s.class, s.increased_time, s.place
     else return nil end
 end
 
---- Sets the students parameters.
--- @number sid the student index.
--- @param the parameter to set.
+--------------------------------------------------------------------------------
+-- Gets the students name.
+-- @param sid the student index
+-- @return lastname, or nil
+-- @return name
+function Tgc:get_student_name (sid)
+    local s = self.students[sid]
+
+    if s then return s.lastname, s.name
+    else return nil end
+end
+
+--------------------------------------------------------------------------------
+-- Gets the students gender.
+-- @param sid the student index
+-- @return gender, or nil
+function Tgc:get_student_gender (sid)
+    local s = self.students[sid]
+
+    if s then
+        if string.match(s.gender, "[fF]") then
+            return "♀"
+        else
+            return "♂"
+        end
+    else return nil end
+end
+
+--------------------------------------------------------------------------------
+-- Gets the students class.
+-- @param sid the student index
+-- @return class, or nil
+-- @return group
+function Tgc:get_student_class (sid)
+    local s = self.students[sid]
+
+    if s then return s.class, s.group
+    else return nil end
+end
+
+--------------------------------------------------------------------------------
+-- Gets the students place.
+-- @param sid the student index
+-- @return place, or nil
+function Tgc:get_student_place (sid)
+    local s = self.students[sid]
+
+    if s then return s.place
+    else return nil end
+end
+
+--------------------------------------------------------------------------------
+-- Gets the students adjustments.
+-- @param sid the student index
+-- @return increased_time, or nil
+function Tgc:get_student_adjustments (sid)
+    local s = self.students[sid]
+
+    if s then return s.increased_time
+    else return nil end
+end
+
+--------------------------------------------------------------------------------
+-- Sets the students parameters.
+-- @param sid the student index
+-- @param * the parameter to set
 function Tgc:set_student_name (sid, name)
     local s = self.students[sid]
     if s then s:update({name = name}) end
@@ -195,7 +269,8 @@ function Tgc:set_student_increased_time (sid, increased_time)
     if s then s:update({increased_time = increased_time}) end
 end
 
---- Returns the number of students.
+--------------------------------------------------------------------------------
+-- Returns the number of students.
 function Tgc:get_students_number ()
     return #self.students
 end
@@ -203,13 +278,16 @@ end
 
 --------------------------------------------------------------------------------
 -- Results stuff.
+-- @section results
+--------------------------------------------------------------------------------
 
---- Iterator that traverses the student's results.
+--------------------------------------------------------------------------------
+-- Iterator that traverses the student's results.
 -- One can iterates over all results with:
 -- `for number, category in tgc:next_student_result(sid) do ... end`
--- @number sid the student index in database.
--- @number q[opt] filter by quarter `q`
--- @return the result's number and category.
+-- @param sid the student index in database
+-- @param q[opt] filter by quarter `q`
+-- @return the result's number and category
 function Tgc:next_student_result (sid, q)
     q = tonumber(q) or nil
 
@@ -228,8 +306,9 @@ function Tgc:next_student_result (sid, q)
     end
 end
 
---- Adds a new student's result.
--- @param o the result's attributes (see Result class).
+--------------------------------------------------------------------------------
+-- Adds a new student's result.
+-- @param o the result's attributes (see Result class)
 function Tgc:add_student_result (sid, o)
     local s = self.students[sid]
     if not s then return nil end
@@ -237,14 +316,14 @@ function Tgc:add_student_result (sid, o)
     return s:add_result(o)
 end
 
---- Removes a student result from the database.
--- @number sid the index of the student.
+-- Removes a student result from the database.
+-- @param sid the index of the student
 function Tgc:remove_student_result (sid, ...)
     local s = self.students[sid]
     if s then table.remove(self.students, sid) end
 end
 
---- Returns informations concerning a student's result.
+-- Returns informations concerning a student's result.
 function Tgc:get_student_result_infos (sid, number, category)
     local s = self.students[sid]
     if not s then return nil end
@@ -254,16 +333,19 @@ function Tgc:get_student_result_infos (sid, number, category)
     local eval_idx = find_eval(number, class, category)
     local title, max_score, over_max = nil, nil, nil
 
-    --TODO: local _, _, quarter, date = 
+    --TODO: local _, _, quarter, date =
 
 end
 
 
 --------------------------------------------------------------------------------
 -- Category rule stuff.
+-- @section category
+--------------------------------------------------------------------------------
 
---- Adds a new category rule to the database.
--- @param o the category rule attributes (see Category_rule class).
+--------------------------------------------------------------------------------
+-- Adds a new category rule to the database.
+-- @param o the category rule attributes (see Category_rule class)
 function Tgc:add_category_rule (o)
     o = o or {}
 
@@ -271,11 +353,11 @@ function Tgc:add_category_rule (o)
     table.insert(self.categories_rules, c)
 end
 
---- Gets the category rule informations
--- @string catname the name of the category.
+-- Gets the category rule informations
+-- @param catname the name of the category
 function Tgc:get_category_rule_infos (catname)
     for _, category in ipairs(self.categories_rules) do
-        local name, coefficient, mandatory, category_mean = category:get_infos() 
+        local name, coefficient, mandatory, category_mean = category:get_infos()
         if catname == name then
             return coefficient, mandatory, category_mean
         end
@@ -286,10 +368,13 @@ end
 
 --------------------------------------------------------------------------------
 -- Evals stuff.
+-- @section evals
+--------------------------------------------------------------------------------
 
---- Iterator that traverses evaluations of a class.
--- @string class_p acclass pattern.
--- Usage: `for eid in tgc:next_eval() do ... end`
+--------------------------------------------------------------------------------
+-- Iterator that traverses evaluations of a class.
+-- @param class_p acclass pattern
+-- @usage for eid in tgc:next_eval() do ... end
 function Tgc:next_eval (class_p)
     class_p = (type(class_p) == "string") and class_p or ".*"
 
@@ -305,9 +390,10 @@ function Tgc:next_eval (class_p)
     end
 end
 
---- Adds an evaluation to the list of all the evaluation in the database.
+--------------------------------------------------------------------------------
+-- Adds an evaluation to the list of all the evaluation in the database.
 -- Uses a binary insertion so the `evaluations` table is always sorted.
--- @tab o the eval attributes.
+-- @param o the eval attributes
 -- @see Eval
 function Tgc:add_eval (o)
     o = o or {}
@@ -316,10 +402,11 @@ function Tgc:add_eval (o)
     table.binsert(self.evaluations, e) -- Binary insertion.
 end
 
---- Find an evaluation.
--- @int number
--- @string class
--- @return the index of the evaluation.
+--------------------------------------------------------------------------------
+-- Find an evaluation.
+-- @prama number
+-- @param class
+-- @return the index of the evaluation
 function Tgc:find_eval(number, class_p, category)
     -- Check if arguments are valid.
     category = category or Eval.category
@@ -337,21 +424,26 @@ function Tgc:find_eval(number, class_p, category)
     return nil -- not found
 end
 
---- Gets an evaluation's main informations
+--------------------------------------------------------------------------------
+-- Gets an evaluation's main informations
 function Tgc:get_eval_infos (eid)
     local e = self.evaluations[eid]
 
     if e then return e:get_infos()
     else return nil end
 end
---- Gets an evaluation's score informations.
+
+--------------------------------------------------------------------------------
+-- Gets an evaluation's score informations.
 function Tgc:get_eval_score_infos (eid)
     local e = self.evaluations[eid]
 
     if e then return e:get_score_infos()
     else return nil end
 end
---- Gets an evaluation's competency informations.
+
+--------------------------------------------------------------------------------
+-- Gets an evaluation's competency informations.
 function Tgc:get_eval_competency_infos (eid)
     local e = self.evaluations[eid]
 
@@ -359,9 +451,10 @@ function Tgc:get_eval_competency_infos (eid)
     else return nil end
 end
 
---- Sets the evaluation parameters.
--- @number eid the evaluation index.
--- @param the parameter to set.
+--------------------------------------------------------------------------------
+-- Sets the evaluation parameters.
+-- @param eid the evaluation index
+-- @param * the parameter to set
 function Tgc:set_eval_category (eid, category)
     local e = self.evaluations[eid]
     if e then e:update({category = category}) end
@@ -379,12 +472,14 @@ function Tgc:set_eval_over_max (eid, over_max)
     if e then e:update({over_max = over_max}) end
 end
 
---- Returns the number of evaluations.
+--------------------------------------------------------------------------------
+-- Returns the number of evaluations.
 function Tgc:get_evaluations_number ()
     return #self.evaluations
 end
 
---- Returns the list of the evaluations categories.
+--------------------------------------------------------------------------------
+-- Returns the list of the evaluations categories.
 -- TODO: Optimize this.
 function Tgc:get_eval_categories_list ()
     local categories = {}
@@ -410,12 +505,15 @@ end
 
 --------------------------------------------------------------------------------
 -- Classes stuff.
+-- @section class
+--------------------------------------------------------------------------------
 
---- Returns the list of the classes in the database.
+--------------------------------------------------------------------------------
+-- Returns the list of the classes in the database.
 -- The list is not sorted.
--- @string[opt=".*"] pattern to filter classes.
+-- @param[opt=".*"] pattern to filter classes
 -- @return a table of the matching classes (default: all) or `nil` if no
--- class is found.
+-- class is found
 function Tgc:get_classes_list (pattern)
     pattern = tostring(pattern or ".*")
 
@@ -434,9 +532,10 @@ function Tgc:get_classes_list (pattern)
     end
 end
 
---- Checks if the class exists.
--- @string class
--- @return `true` if the class exists, `false` otherwise.
+--------------------------------------------------------------------------------
+-- Checks if the class exists.
+-- @param class
+-- @return `true` if the class exists, `false` otherwise
 function Tgc:is_class_exist(class)
     if type(class) ~= "string" then
         return false
@@ -449,15 +548,34 @@ function Tgc:is_class_exist(class)
     return false
 end
 
+--------------------------------------------------------------------------------
+-- Returns the size of a class.
+-- @param class class pattern
+-- @return the size of the class
+function Tgc:get_class_size(class)
+    local size = 0
+
+    for sid in self:next_student(class) do
+        size = size + 1
+    end
+
+    return size
+end
+
 
 --------------------------------------------------------------------------------
 -- Report stuff.
+-- @section report
+--------------------------------------------------------------------------------
 
 
 --------------------------------------------------------------------------------
 -- Debug stuff.
+-- @section stuff
+--------------------------------------------------------------------------------
 
---- Prints the database informations in a human readable way.
+--------------------------------------------------------------------------------
+-- Prints the database informations in a human readable way.
 function Tgc:plog (prompt)
     local function plog (s, ...) print(string.format(s, ...)) end
     prompt = prompt and prompt .. ".tgc" or "tgc"

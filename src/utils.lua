@@ -35,10 +35,10 @@ end
 
 --- Binary insertion.
 -- Does a binary insertion of a given value into the table
--- See: http://lua-users.org/wiki/BinaryInsert
 -- @param list
 -- @param value to insert
 -- @param comp[opt] comparison function (default < operator)
+-- @see: http://lua-users.org/wiki/BinaryInsert
 function _M.binsert(list, value, comp)
     -- Initialise compare function
     local comp = comp or function(a, b) return a < b end
