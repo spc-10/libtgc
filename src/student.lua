@@ -227,17 +227,28 @@ end
 --  - "hard": return shorten name and lastname in full initials
 -- @param style[opt="no"] format style
 -- @return the formated name and lastname
-function Student:get_name (shorten)
+function Student:get_name (style)
     local style = style or "no"
+    local name, lastname = self.name, self.lastname
 
+    -- FIXME: do not work with accentuated letters!
     local function first_upper_dot(space, s)
         return space .. string.upper(string.sub(s, 1, 1)) .. "."
     end
 
     -- TODO check style...
-    return string.gsub(self.name, "([%-%s])(%a%a*)", first_upper_dot),
-        string.gsub(self.lastname, "([%-%s])(%a%a*)", first_upper_dot)
+    if style == "name" or style == "all" then
+        name = string.gsub(name, "([%-%s])([^%-%s%.][^%-%s%.]*)", first_upper_dot)
+    end
+    if style == "lastname" or style == "all" then
+        lastname = string.gsub(lastname, "([%-%s])([^%-%s%.][^%-%s%.]*)", first_upper_dot)
+    end
+    if style == "hard" then
+        name = string.gsub(name, "([%-%s]*)([^%-%s%.][^%-%s%.]*)", first_upper_dot)
+        lastname = string.gsub(lastname, "([%-%s]*)([^%-%s%.][^%-%s%.]*)", first_upper_dot)
+    end
 
+    return name, lastname
 end
 
 ---------------------------------------------------------------------------------

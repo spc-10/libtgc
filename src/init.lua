@@ -189,12 +189,13 @@ end
 --------------------------------------------------------------------------------
 -- Gets the students name.
 -- @param sid the student index
--- @return lastname, or nil
--- @return name
-function Tgc:get_student_name (sid)
+-- @param style[opt] the format style
+-- @return name, lastname or nil
+function Tgc:get_student_name (sid, style)
     local s = self.students[sid]
+    local style = style or "no"
 
-    if s then return s.lastname, s.name
+    if s then return s:get_name(style)
     else return nil end
 end
 
