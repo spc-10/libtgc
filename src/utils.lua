@@ -100,6 +100,14 @@ function _M.file_exists (name)
    else return false, string.format("File %s can not be opened.", name) end
 end
 
+
+
+--------------------------------------------------------------------------------
+-- Prints logs.
+function _M.plog (s, ...)
+    return io.write(string.format(s, ...))
+end
+
 --------------------------------------------------------------------------------
 --- Prints a warning message on the stderr.
 --------------------------------------------------------------------------------
