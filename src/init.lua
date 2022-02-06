@@ -318,6 +318,7 @@ function Tgc:add_student_result (sid, o)
 end
 
 -- Removes a student result from the database.
+-- FIXME: Do not work!!
 -- @param sid the index of the student
 function Tgc:remove_student_result (sid, ...)
     local s = self.students[sid]
@@ -325,13 +326,13 @@ function Tgc:remove_student_result (sid, ...)
 end
 
 -- Returns informations concerning a student's result.
-function Tgc:get_student_result_infos (sid, number, category)
+function Tgc:get_student_result_infos (sid, title_p, category)
     local s = self.students[sid]
     if not s then return nil end
 
     -- Finds the corresponding evaluation.
     local _, _, class = s:get_infos()
-    local eval_idx = find_eval(number, class, category)
+    local eval_idx = self:find_eval(title_p, class, category)
     local title, max_score, over_max = nil, nil, nil
 
     --TODO: local _, _, quarter, date =
@@ -405,20 +406,31 @@ end
 
 --------------------------------------------------------------------------------
 -- Find an evaluation.
--- @prama number
--- @param class
--- @return the index of the evaluation
-function Tgc:find_eval(number, class_p, category)
+-- @param title_p a title pattern
+-- @param class a class which which did the evaluation
+-- @param category[opt=] optional category (use class default)
+-- @return the index of the evaluation. It returns the first matching eval
+-- (does not check for multiple matchs).
+function Tgc:find_eval(title_p, class, category)
     -- Check if arguments are valid.
-    category = category or Eval.category
-    if not tonumber(number) or not class_p then
+    if not title_p or not class then
         return nil
     end
 
+    -- TODO: match class
     for eid, e in ipairs(self.evaluations) do
-        local nb, cat, class = e:get_infos()
-        if nb == number and cat == category and string.match(class, class_p) then
-            return eid
+        -- if string.match(class, e.class_p) then
+        --     print("DEBUG match!", class, e.class_p)
+        -- end
+        -- if string.match(e.title, title_p) then
+        --     print("DEBUG match!", e.title, title_p)
+        -- end
+        if string.match(e.title, title_p) and string.match(class, e.class_p) then
+            if not category then
+                return eid
+            elseif category and self.category == category then
+                return eid
+            end
         end
     end
 
