@@ -1,5 +1,6 @@
 local tgc = require "tgc"
 
+math.randomseed(os.clock())
 local names, lastnames = {}, {}
 local categories = {"test", "qcm", "final", "homework", "experimental"}
 local genders   = {"f", "m"}
@@ -66,7 +67,47 @@ end
 local lastnames = read_lines ("noms.txt")
 local names     = read_lines ("prenoms.txt")
 
--- Here we start ---------------------------------------------------------------
+-- Generates a random name.
+local function random_name ()
+    local name, sep
+
+    -- Sometimes generates compound names
+    if math.random(5) == 1 then
+        if math.random(2) == 1 then sep = " " else sep = "-" end
+
+        name = string.gsub(names[math.random(#names)], "^%a", string.upper) ..
+            sep ..
+            string.gsub(names[math.random(#names)], "^%a", string.upper)
+
+    else
+        name = string.gsub(names[math.random(#names)], "^%a", string.upper)
+    end
+
+    return name
+end
+
+-- Generates a random lastname.
+local function random_lastname ()
+    local lastname, sep
+
+    -- Sometimes generates compound names
+    if math.random(5) == 1 then
+        if math.random(2) == 1 then sep = " " else sep = "-" end
+
+        lastname = string.gsub(lastnames[math.random(#lastnames)], "^%a", string.upper) ..
+            sep ..
+            string.gsub(lastnames[math.random(#lastnames)], "^%a", string.upper)
+
+    else
+        lastname = string.gsub(lastnames[math.random(#lastnames)], "^%a", string.upper)
+    end
+
+    return lastname
+end
+
+--------------------------------------------------------------------------------
+-- Here we start
+--------------------------------------------------------------------------------
 
 print "\nInitialisation..."
 tgc = tgc.init()
@@ -77,13 +118,13 @@ print(tgc._VERSION)
 local N = 20
 print(string.format("\nAdding %d new students...", N))
 for i = 1, N do
-    local name     = string.gsub(names[math.random(#names)], "^%a", string.upper)
-    local lastname = string.gsub(lastnames[math.random(#lastnames)], "^%a", string.upper)
+    local name     = random_name()
+    local lastname = random_lastname()
     local gender   = genders[math.random(1,2)]
     local class    = random_class()
     local group    = random_group(3)
     local place    = random_place(3)
-    local increased_time = math.random() + 1
+    local increased_time = math.random() + 1 -- FIXME
 
     --print(lastname, name, class)
     tgc:add_student({
@@ -114,7 +155,7 @@ local M = 20
 print(string.format("\nAdding %d new evaluations...", M))
 for i = 1, M do
     local number    = i
-    local class     = random_class()
+    local class_p   = random_class()
     local category  = random_category(5)
     local title     = "Evaluation n° " .. i
     local max_score = math.random(4) * 5
@@ -128,13 +169,19 @@ for i = 1, M do
 
     tgc:add_eval({
         number = number,
-        class = class,
+        class_p = class_p,
         category = category,
         title = title,
         max_score = max_score,
         over_max = over_max})
 
-    print(string.format("\nAdding results for students belonging to %s", class))
+    -- print the eval infos
+    io.write(string.format("Eval %3s" , number))
+    io.write(string.format(" - %s", title))
+    io.write(string.format(" [%s])", category))
+    io.write(string.format(" for class %s\n", class_p))
+
+    io.write(string.format("Adding results for students belonging to %s", class_p))
     for sid in tgc:next_student(class) do
         tgc:add_student_result(sid, {
             number = number,
@@ -143,7 +190,9 @@ for i = 1, M do
             quarter = quarter,
             score = over_max and math.random() * max_score or math.random() * max_score * 1.1,
         })
+        io.write(string.format(".", class))
     end
+    io.write(string.format("\n"))
 end
 
 print("\nAdding categories rules...")
@@ -218,21 +267,26 @@ local categories = tgc:get_eval_categories_list()
 print("Categories: ", table.concat(categories, ", "))
 
 print("Search by categories, number and class...")
-for i = 1, #categories do
-    for m = 1, M do
-        for level = 3, 5 do
-            for n = 1, 9 do
-                local class = level .. "e" .. n
-                local eid = tgc:find_eval(m, class, categories[i])
+title_p = "val"
+
+for c = 0, #categories do
+    for N = 3, 5 do
+        for M = 1, 10 do
+        local class = N .. "e" .. M
+            for n = 1, 10 do
+                local title_p = n .. ".*"
+                local eid = tgc:find_eval(title_p, class, categories[c] or nil)
                 if eid then
-                    local number, category, class = tgc:get_eval_infos(eid)
-                    io.write(string.format("Found: %d - %d %s %s\n", eid, number, category, class))
+                    io.write(string.format("Searching for \"%s\" title pattern, \"%s\" class pattern and %s category…\n",
+                    title_p, class, categories[c] or nil))
+                    local number, category, class, title = tgc:get_eval_infos(eid)
+                    io.write(string.format("  - found: %d - %s [%s] for class %s.\n",
+                    eid, title, category, class))
                 end
             end
         end
     end
 end
-
 
 --------------------------------------------------------------------------------
 
@@ -241,25 +295,31 @@ tgc:plog()
 
 --------------------------------------------------------------------------------
 
-print("\nPlog (by hand)")
-print("Evaluations:")
-for eid in tgc:next_eval() do
-    local number, category, class, title         = tgc:get_eval_infos(eid)
-    local max_score, over_max                    = tgc:get_eval_score_infos(eid)
-    local competency_mask, competency_score_mask = tgc:get_eval_competency_infos(eid)
-
-    print(string.format("%s> Eval. n. %2d (%s), cat. %s %q (%s) [%s] /%d%s",
-        "By hand", number, class, category, title,
-        competency_mask, competency_score_mask,
-        max_score, over_max and "[+]" or ""))
-end
-print("Students:")
-for sid in tgc:next_student() do
-    local lastname, name, class, increased_time, place = tgc:get_student_infos(sid)
-    print(string.format("%s> Name: %s %s, %s (place: %2s, time+: %s)",
-        "By hand", lastname, name, class, place, increased_time and "yes" or "no"))
-end
-
+-- print("\nPlog (by hand)")
+-- print("Evaluations:")
+-- for eid in tgc:next_eval() do
+--     local number, category, class, title         = tgc:get_eval_infos(eid)
+--     local max_score, over_max                    = tgc:get_eval_score_infos(eid)
+--     -- local competency_mask, competency_score_mask = tgc:get_eval_competency_infos(eid)
+-- 
+--     print(string.format("%s> Eval. n. %2d (%s), cat. %s %q (%s) [%s] /%d%s",
+--         "By hand", number, class, category, title,
+--         "-", "-",
+--         -- competency_mask, competency_score_mask,
+--         max_score, over_max and "[+]" or ""))
+-- end
+-- 
+-- print("Students:")
+-- for sid in tgc:next_student() do
+--     local lastname, name = tgc:get_student_name(sid, "no")
+--     local lastname_s, name_s = tgc:get_student_name(sid, "all")
+--     local lastname_h, name_h = tgc:get_student_name(sid, "hard")
+--     local _, _, class, increased_time, place = tgc:get_student_infos(sid)
+--     print(string.format("%s> Name: %s %s (%s %s [%s %s]), %s (place: %2s, time+: %s)",
+--         "By hand",
+--         lastname, name, lastname_s, name_s, lastname_h, name_h,
+--         class, place, increased_time and "yes" or "no"))
+-- end
 
 print("\nWriting database...")
 tgc:write("notes.lua")
