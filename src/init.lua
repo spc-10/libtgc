@@ -207,12 +207,10 @@ function Tgc:get_student_gender (sid)
     local s = self.students[sid]
 
     if s then
-        if string.match(s.gender, "[fF]") then
-            return "♀"
-        else
-            return "♂"
-        end
-    else return nil end
+        return s:get_gender()
+    else
+        return nil
+    end
 end
 
 --------------------------------------------------------------------------------

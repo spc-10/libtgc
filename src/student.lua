@@ -251,6 +251,19 @@ function Student:get_name (style)
     return name, lastname
 end
 
+--------------------------------------------------------------------------------
+-- Gets the students gender.
+-- @return gender (female, male or other by default)
+function Student:get_gender ()
+    if string.match(self.gender, "[fF]") then
+        return "female"
+    elseif string.match(self.gender, "[mM]") then
+        return "male"
+    else
+        return "other"
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- TODO: eval and reports getters...
 --function Student:get_results ()        return self.results end
