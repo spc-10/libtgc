@@ -165,33 +165,51 @@ end
 
 --- Returns the evaluation's main informations.
 function Eval:get_infos ()
-    return self.number, self.category, self.class, self.title
+    return self.number, self.category, self.class_p, self.title
 end
 --- Returns the evaluation's score informations.
 function Eval:get_score_infos ()
     return self.max_score, self.over_max
 end
 --- Returns the evaluation's competency informations.
-function Eval:get_competency_infos ()
-    return self.competency_mask, self.competency_score_mask
-end
+-- function Eval:get_competency_infos ()
+--     return self.competency_mask, self.competency_score_mask
+-- end
+
+--------------------------------------------------------------------------------
+-- Category stuff
+
+local categories = {
+    "standard",
+    "level",
+    "sublevel",
+    "homework",
+    "work",
+    "att"}
+
+
+
+
+
+
 
 --------------------------------------------------------------------------------
 -- Debug stuff
 
 --- Prints the database informations in a human readable way.
-function Eval:plog (prompt)
-    local function plog (s, ...) print(string.format(s, ...)) end
-    prompt = prompt and prompt .. ".eval" or "eval"
+function Eval:plog (prompt_lvl)
+    local prompt_lvl = prompt_lvl or 0
+    local tab = "  "
+    local prompt = string.rep(tab, prompt_lvl)
 
-    local number, category, class, title         = self:get_infos()
+    local number, category, class_p, title         = self:get_infos()
     local max_score, over_max                    = self:get_score_infos()
-    local competency_mask, competency_score_mask = self:get_competency_infos()
-    plog("%s> Eval. n. %2d (%s), cat. %s %q (%s) [%s] /%d%s",
-        prompt,
-        number, class, category, title,
-        competency_mask, competency_score_mask,
-        max_score, over_max and "[+]" or "")
+    -- local competency_mask, competency_score_mask = self:get_competency_infos()
+    utils.plog("%sEval. n° %2d: %s\n", prompt, number, title)
+    utils.plog("%s%s- category: %s\n", prompt, tab, category)
+    utils.plog("%s%s- class: %s\n", prompt, tab, class_p)
+    utils.plog("%s%s- score: /%d%s\n", prompt, tab, max_score, over_max and " (can be overscored)" or "")
+    utils.plog("%s%s- competencies: /%s\n", prompt, tab, competencies)
 end
 
 

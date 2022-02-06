@@ -139,17 +139,17 @@ end
 --------------------------------------------------------------------------------
 --- Print a summary of the evaluation result
 --------------------------------------------------------------------------------
-function Result:plog (prompt)
-    local function plog (s, ...) print(string.format(s, ...)) end
-    prompt = prompt and prompt .. ".result" or "result"
+function Result:plog (prompt_lvl)
+    local prompt_lvl = prompt_lvl or 0
+    local tab = "  "
+    local prompt = string.rep(tab, prompt_lvl)
 
     local number, category, quarter, date = self:get_infos()
     local score                           = self:get_score_infos()
     local competencies                    = self:get_competency_infos()
-    plog("%s> Results for eval %s [%s], %s Q%d: %s / %s",
-        prompt,
-        number, category, date, quarter,
-        score, competencies)
+    utils.plog("%s- eval %s [%s]\n", prompt, number, category)
+    utils.plog("%s%s- date: %s - quarter %d\n", prompt, tab, date, quarter)
+    utils.plog("%s%s- score: %.2f - competencies: %s\n", prompt, tab, score, competencies)
 end
 
 

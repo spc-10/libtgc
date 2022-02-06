@@ -279,29 +279,22 @@ end
 
 ---------------------------------------------------------------------------------
 -- Prints the database informations in a human readable way.
-function Student:plog (prompt)
-    local function plog (s, ...) io.write(string.format(s, ...)) end
-    prompt = prompt and prompt .. ".student" or "student"
+function Student:plog (prompt_lvl)
+    local prompt_lvl = prompt_lvl or 0
+    local tab = "  "
+    local prompt = string.rep(tab, prompt_lvl)
 
-    plog("%s> Name: %s %s" , prompt, self.lastname, self.name)
-    if string.match(self.gender, "[fF]") then
-        plog("(%s) ", "♀")
-    else
-        plog("(%s) ", "♂")
-    end
-    plog("Class: %s ", self.class)
-    if self.group then
-        plog("(group: %s) ", self.group)
-    end
-    if self.place then
-        plog("place: %s ", self.place)
-    end
-    if self.increased_time then
-        plog("| time × %f\n", self.increased_time)
-    end
+    local name, lastname = self:get_name()
+    utils.plog("%sName: %s - Lastname %s (%s)\n" , prompt, name, lastname, self:get_gender())
+    utils.plog("%s%s- class: %s (%s)\n", tab, prompt, self.class, self.group or "no group")
+    utils.plog("%s%s- place: %s\n", prompt, tab, self.place or "none")
+    utils.plog("%s%s- increased time: × %.2f\n", prompt, tab, self.increased_time or 1)
 
+    if self.results then
+        utils.plog("%s%s- results:\n", prompt, tab)
+    end
     for _, r in ipairs(self.results) do
-        r:plog(prompt)
+        r:plog(prompt_lvl + 2)
     end
 end
 

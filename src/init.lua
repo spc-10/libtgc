@@ -577,25 +577,26 @@ end
 
 --------------------------------------------------------------------------------
 -- Prints the database informations in a human readable way.
-function Tgc:plog (prompt)
-    local function plog (s, ...) print(string.format(s, ...)) end
-    prompt = prompt and prompt .. ".tgc" or "tgc"
+function Tgc:plog ()
+    local prompt_lvl = prompt_lvl or 0
+    local tab = "  "
+    local prompt = string.rep(tab, prompt_lvl)
 
-    plog("\n%s> Category rule:", prompt)
-    for _, c in ipairs(self.categories_rules) do
-        c:plog(prompt)
-    end
-    plog("\n%s> Evaluations:", prompt)
+    -- utils.plog("%sCategory rule:\n", prompt)
+    -- for _, c in ipairs(self.categories_rules) do
+    --     c:plog(prompt_lvl + 1)
+    -- end
+    utils.plog("%sEvaluations:\n", prompt)
     for _, e in ipairs(self.evaluations) do
-        e:plog(prompt)
+        e:plog(prompt_lvl + 1)
     end
-    plog("\n%s> Students:", prompt)
+    utils.plog("%sStudents:\n", prompt)
     for _, s in ipairs(self.students) do
-        s:plog(prompt)
+        s:plog(prompt_lvl + 1)
     end
 
-    plog("\n%s> Number of students : %q.",  prompt, self:get_students_number())
-    plog("%s> Number of evaluations : %q.", prompt, self:get_evaluations_number())
+    utils.plog("%s> Number of students : %q.\n",  prompt, self:get_students_number())
+    utils.plog("%s> Number of evaluations : %q.\n", prompt, self:get_evaluations_number())
 end
 
 return setmetatable({init = Tgc.init}, nil)
