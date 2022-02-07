@@ -1,3 +1,7 @@
+#!/usr/bin/lua
+
+package.path = "../src/?.lua;../src/?/init.lua;" -- .. package.path
+
 local tgc = require "tgc"
 
 math.randomseed(os.clock())

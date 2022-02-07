@@ -1,13 +1,14 @@
 LUA_DIR = $(HOME)/lib/lua
 TGC_DIR = $(LUA_DIR)/tgc
+SRC_DIR = src/tgc
 
-TGC_LUAS = src/init.lua \
-		   src/student.lua \
-		   src/eval.lua \
-		   src/result.lua \
-		   src/catrule.lua \
-		   src/competency.lua \
-		   src/utils.lua
+TGC_LUAS = $(SRC_DIR)/init.lua \
+		   $(SRC_DIR)/student.lua \
+		   $(SRC_DIR)/eval.lua \
+		   $(SRC_DIR)/result.lua \
+		   $(SRC_DIR)/catrule.lua \
+		   $(SRC_DIR)/competency.lua \
+		   $(SRC_DIR)/utils.lua
 
 build clean:
 
