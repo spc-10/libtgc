@@ -84,7 +84,7 @@ end
 --  @return (bool)
 --------------------------------------------------------------------------------
 function _M.is_quarter_valid (quarter)
-    if not tonumber(quarter) then return false end
+    if not type(quarter) == "number" then return false end
     if quarter ~= 1 and quarter ~= 2 and quarter ~= 3 then return false end
 
     return true
@@ -111,9 +111,8 @@ end
 --------------------------------------------------------------------------------
 --- Prints a warning message on the stderr.
 --------------------------------------------------------------------------------
-function _M.warning (s, ...)
-    s = "Warning: " .. s
-    return io.stderr:write(s:format(...))
+function _M.DEBUG (...)
+    print("DEBUG: ", ...)
 end
 
 return _M

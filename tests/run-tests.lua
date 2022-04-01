@@ -1,39 +1,108 @@
 #!/usr/bin/lua
 
-package.path = "../src/?.lua;../src/?/init.lua;" -- .. package.path
+package.path = "../src/?.lua;../src/?/init.lua;" -- use development version
 
+local plog = require "tgc.utils".plog
+
+local function DEBUG (var, val)
+    io.stderr:write(string.format("DEBUG - %s = %s\n", var, val))
+end
+
+math.randomseed(os.time())
+
+--------------------------------------------------------------------------------
+-- Load TGC
 local tgc = require "tgc"
+plog("\nInitialisation... ")
+tgc = tgc.init()
+plog("%s loaded\n", tgc._VERSION)
 
-math.randomseed(os.clock())
-local names, lastnames = {}, {}
-local categories = {"test", "qcm", "final", "homework", "experimental"}
-local genders   = {"f", "m"}
+--------------------------------------------------------------------------------
+-- Default variables
+local LASTNAMES_FILE = "noms.txt"
+local NAMES_FILE     = "prenoms.txt"
+local N = 10 -- number of students
+local C = 10 -- number of classes
+local M = 10 -- number of evaluations
 
--- Reads a database line by line.
-local function read_lines (filename)
+--------------------------------------------------------------------------------
+-- Random generators
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+-- Generates a random name.
+local function random_name (filename)
+    assert(io.open(filename))
+
+    -- First read the names in the datafile
     local count = 1
-    local table = {}
+    local name, sep
+    local names = {}
     for line in io.lines(filename) do
         if not string.find(line, "^#") then
-            table[count] = line
+            names[count] = line
             count = count + 1
         end
     end
-    return table
+
+    -- Now generate a random name
+    if math.random(5) == 1 then
+        -- Sometimes generates compound names
+        if math.random(2) == 1 then
+            sep = " "
+        else sep = "-"
+        end
+        name = string.gsub(names[math.random(#names)], "^%a", string.upper) ..
+            sep ..
+            string.gsub(names[math.random(#names)], "^%a", string.upper)
+    else
+        name = string.gsub(names[math.random(#names)], "^%a", string.upper)
+    end
+
+    return name
 end
 
--- Returns true or false
+--------------------------------------------------------------------------------
+-- Random gender F, M or other same frequency.
+local function random_gender ()
+    local genders = {"f", "m"}
+    return genders[math.random(3)]
+end
+
+--------------------------------------------------------------------------------
+-- Random gender F, M or other same frequency.
+local function random_tuple ()
+    local tuple = ""
+    for i = 1, math.random(3, 5) do
+        tuple = tuple .. string.char(math.random(97, 122))
+    end
+    return tuple
+end
+
+--------------------------------------------------------------------------------
+-- Returns true or false.
 local function true_or_false ()
     return math.random(2) > 1
 end
 
+--------------------------------------------------------------------------------
 -- Generates a random class.
--- @param group_freq add a group with an 1/group_freq frequency
-local function random_class (group_freq)
-    local level, number = math.random(3, 5), math.random(9)
-    return level .. "e" .. number
+local classes = {}
+for i = 1, C do
+    local level, number = math.random(3, 6), math.random(5)
+    classes[i] = level .. "e" .. number
+end
+local function random_class ()
+    return classes[math.random(C)]
 end
 
+--------------------------------------------------------------------------------
+-- Generates a random class level
+local function random_class_level (group_freq)
+    return math.random(3, 6) .. "e"
+end
+
+--------------------------------------------------------------------------------
 -- Generates a random group.
 -- @param freq add a group with an 1/freq frequency
 local function random_group (freq)
@@ -46,10 +115,13 @@ local function random_group (freq)
     end
 end
 
+--------------------------------------------------------------------------------
 -- Generates a random evaluation category.
 -- @param no_cat if present, generate an eval with no category with an 1/no_cat
 -- frequency.
 local function random_category (no_cat)
+    local categories = tgc:get_eval_types_list()
+
     if no_cat and (math.random(no_cat) == no_cat) then
         return nil
     else
@@ -57,6 +129,7 @@ local function random_category (no_cat)
     end
 end
 
+--------------------------------------------------------------------------------
 -- Generates a random place.
 -- @param no_place if present, return nil with an 1/no_place frequency.
 local function random_place (no_place)
@@ -67,68 +140,77 @@ local function random_place (no_place)
     end
 end
 
--- Read names
-local lastnames = read_lines ("noms.txt")
-local names     = read_lines ("prenoms.txt")
+--------------------------------------------------------------------------------
+-- Generates a random extra time.
+local function random_extra_time ()
+    local r = math.random(10)
 
--- Generates a random name.
-local function random_name ()
-    local name, sep
-
-    -- Sometimes generates compound names
-    if math.random(5) == 1 then
-        if math.random(2) == 1 then sep = " " else sep = "-" end
-
-        name = string.gsub(names[math.random(#names)], "^%a", string.upper) ..
-            sep ..
-            string.gsub(names[math.random(#names)], "^%a", string.upper)
-
+    if r == 1 then
+        return 25
+    elseif r <= 4 then
+        return 33
     else
-        name = string.gsub(names[math.random(#names)], "^%a", string.upper)
+        return nil
     end
-
-    return name
 end
 
--- Generates a random lastname.
-local function random_lastname ()
-    local lastname, sep
+--------------------------------------------------------------------------------
+-- Generates a random competencies.
+local function random_competencies ()
+    local competencies = ""
+    repeat
+        for id = 1, 8 do
+            -- A third chance to add this competency
+            if math.random(3) == 1 then
+                competencies = competencies .. id .. string.char(math.random(4) + 64)
+                -- Sometimes add more competencies grades
+                for n = 1, 3 do
+                    if math.random(3) == 1 then
+                        competencies = competencies .. string.char(math.random(4) + 64)
+                    end
+                end
+                competencies = competencies .. " "
+            end
+        end
+    until not string.match(competencies, "^%s*$")
 
-    -- Sometimes generates compound names
-    if math.random(5) == 1 then
-        if math.random(2) == 1 then sep = " " else sep = "-" end
+    return competencies
+end
 
-        lastname = string.gsub(lastnames[math.random(#lastnames)], "^%a", string.upper) ..
-            sep ..
-            string.gsub(lastnames[math.random(#lastnames)], "^%a", string.upper)
-
+--------------------------------------------------------------------------------
+-- Generates a random grade.
+local function random_grade (max_score, over_max)
+    local max_score = max_score or 20
+    local over_max = over_max
+    local d3 = math.random(3)
+    if d3 == 1 then -- no numbered grade
+        local comp = random_competencies()
+        return comp, nil, comp
+    elseif d3 == 2 then -- no competencies
+        local num = over_max and math.random() * max_score or math.random() * max_score * 1.1
+        return num, num, nil
     else
-        lastname = string.gsub(lastnames[math.random(#lastnames)], "^%a", string.upper)
+        local num = over_max and math.random() * max_score or math.random() * max_score * 1.1
+        local comp = random_competencies()
+        return {num, comp}, num, comp
     end
-
-    return lastname
 end
 
 --------------------------------------------------------------------------------
 -- Here we start
 --------------------------------------------------------------------------------
 
-print "\nInitialisation..."
-tgc = tgc.init()
--- print("\nReading database...")
--- tgc:load("notes.lua")
-print(tgc._VERSION)
-
-local N = 20
-print(string.format("\nAdding %d new students...", N))
+--------------------------------------------------------------------------------
+-- Add students.
+plog("\nAdding %d new students...\n", N)
 for i = 1, N do
-    local name     = random_name()
-    local lastname = random_lastname()
-    local gender   = genders[math.random(1,2)]
-    local class    = random_class()
-    local group    = random_group(3)
-    local place    = random_place(3)
-    local increased_time = math.random() + 1 -- FIXME
+    local name       = random_name(NAMES_FILE)
+    local lastname   = random_name(LASTNAMES_FILE)
+    local gender     = random_gender()
+    local class      = random_class()
+    local group      = random_group(3)
+    local place      = random_place(3)
+    local extra_time = random_extra_time()
 
     --print(lastname, name, class)
     tgc:add_student({
@@ -138,95 +220,184 @@ for i = 1, N do
         class          = class,
         group          = group,
         place          = place,
-        increased_time = increased_time})
+        extra_time = extra_time})
 
     -- print the student infos
-         io.write(string.format("%12s %12s" , lastname, name))
-         if string.match(gender, "[fF]") then
-             io.write(string.format(" (%s)", "♀"))
-         else
-             io.write(string.format(" (%s)", "♂"))
-         end
-         io.write(string.format("\tclass: %6s", class))
-         io.write(string.format(" (group: %10s)", group))
-         io.write(string.format("\tplace: %s", place))
-         if increased_time then
-             io.write(string.format("\t[time × %.1f]\n", increased_time))
-         end
-end
-
-local M = 20
-print(string.format("\nAdding %d new evaluations...", M))
-for i = 1, M do
-    local number    = i
-    local class_p   = random_class()
-    local category  = random_category(5)
-    local title     = "Evaluation n° " .. i
-    local max_score = math.random(4) * 5
-    local over_max  = true_or_false()
-
-    -- For results
-    local year    = math.random(1900, 2100)
-    local month   = math.random(1, 12)
-    local day     = math.random(1, 31)
-    local quarter = math.random(1, 3)
-
-    tgc:add_eval({
-        number = number,
-        class_p = class_p,
-        category = category,
-        title = title,
-        max_score = max_score,
-        over_max = over_max})
-
-    -- print the eval infos
-    io.write(string.format("Eval %3s" , number))
-    io.write(string.format(" - %s", title))
-    io.write(string.format(" [%s])", category))
-    io.write(string.format(" for class %s\n", class_p))
-
-    io.write(string.format("Adding results for students belonging to %s", class_p))
-    for sid in tgc:next_student(class) do
-        tgc:add_student_result(sid, {
-            number = number,
-            category = category,
-            date = os.date("%Y/%m/%d", os.time({year = year, month = month, day = day})),
-            quarter = quarter,
-            score = over_max and math.random() * max_score or math.random() * max_score * 1.1,
-        })
-        io.write(string.format(".", class))
-    end
-    io.write(string.format("\n"))
-end
-
-print("\nAdding categories rules...")
-local categories = tgc:get_eval_categories_list()
-for _, category in ipairs(categories) do
-    tgc:add_category_rule({
-        name          = category,
-        coefficient   = math.random() * 5,
-        mandatory     = true_or_false(),
-        category_mean = true_or_false(),
-    })
+        plog("- %s, %s" , name, lastname)
+        gender = tostring(gender)
+        if string.match(gender, "[fF]") then
+            plog(" (%s)", "♀")
+        elseif string.match(gender, "[mM]") then
+            plog(" (%s)", "♂")
+        else
+            plog(" (%s)", "n")
+        end
+        plog(", %s", class)
+        if group then
+            plog(" (%s)", group)
+        end
+        plog(", place: %s", place or "no")
+        if extra_time then
+            plog(" [time + %d/100]", extra_time)
+        end
+        plog("\n")
 end
 
 --------------------------------------------------------------------------------
+-- Add evaluations.
+print(string.format("\nAdding %d new evaluations...", M))
+for i = 1, M do
+    local class_p          = random_class_level()
+    local category         = random_category(5)
+    local title            = "Evaluation n° " .. i
+    local max_score        = math.random(4) * 5
+    local over_max         = true_or_false()
+    local multi            = true --_or_false()
+    local success_score_pc = math.random(100)
+    if success_score_pc < 50 then success_score_pc = nil end
 
-print("\nFinding students by lastnames...")
-for i = 1, #lastnames do
-    local lastname_p = string.gsub(lastnames[i], "^%a", string.upper)
-    -- io.write(lastname_p .. " ")
-    local sid = tgc:find_student(lastname_p)
-    if sid then
-        local lastname, name = tgc:get_student_name(sid)
-        local gender = tgc:get_student_gender(sid)
-        io.write(string.format("Found: %d - %s %s (%s) for pattern \"%s\"\n", sid, lastname, name, gender, lastname_p))
+    local eid                = tgc:add_eval({
+        class_p              = class_p,
+        category             = category,
+        title                = title,
+        max_score            = max_score,
+        over_max             = over_max,
+        allow_multi_attempts = multi,
+        success_score_pc     = success_score_pc})
+
+    -- print the eval infos
+    plog("- %s", title)
+    plog(" [%s])", multi and "m" or "u")
+    plog(" for class %s\n", class_p)
+
+    -- add subevals for a third of the evals
+    if i%3 ~= 0 then
+        plog("  - subevaluations:\n")
+        for j = 1, math.random(10) do
+            -- Some times, let the subeval inherits from its parent
+            local title, max_score, over_max = nil, nil, nil
+            if math.random(2) == 1 then
+                title     = "Sub-evaluation n° " .. i .. "." .. j
+                max_score = math.random(4) * 5
+                over_max  = true_or_false()
+            end
+
+            tgc:add_subeval(eid, {
+                title     = title,
+                max_score = max_score,
+                over_max  = over_max})
+
+            -- print the subeval infos
+            plog("     o %s\n", title)
+        end
     end
 end
 
+--------------------------------------------------------------------------------
+-- Add some results.
+plog("\nAdding results for students...\n")
+for sid in tgc:next_student() do
+    local name, lastname = tgc:get_student_name(sid)
+    local class = tgc:get_student_class(sid)
+
+    plog("- %s %s, %s\n", name, lastname, class)
+
+    -- Now search all the evaluations for this class
+    for eid in tgc:next_eval(class) do
+        -- Random date
+        local year    = math.random(1900, 2100)
+        local month   = math.random(1, 12)
+        local day     = math.random(1, 31)
+        local date    = os.date("%Y/%m/%d", os.time({year = year, month = month, day = day}))
+        local quarter = math.random(1, 3)
+
+        local max_score, over_max = tgc:get_eval_score_infos(eid)
+        local category, _, _, _ = tgc:get_eval_infos(eid)
+
+        -- add subresults
+        if tgc:has_subevals(eid) then
+            plog("  o eval %d, %s (%s) :\n", eid, date, quarter)
+            for j = 1, tgc:get_last_eval_subid(eid) do
+                -- print the subeval infos
+                plog("     - %d.%d %s (%s) : ", eid, j, date, quarter)
+                -- Add multiple scores for a same eval
+                for k = 1, math.random(3) do
+                    local subeid = j
+                    local grade, score, competencies = random_grade(max_score, over_max)
+
+                    -- print the scores
+                    if score then
+                        plog("%.2f", score)
+                    else
+                        plog("-")
+                    end
+                    plog("/%.0f [%s], ", max_score, competencies or "")
+                    tgc:add_student_result(sid, eid, subeid, {
+                        date    = date,
+                        quarter = quarter,
+                        grades  = grade})
+
+                end
+                plog("\n")
+            end
+        else
+            local grade, score, competencies = random_grade(max_score, over_max)
+            tgc:add_student_result(sid, eid, {
+                date    = date,
+                quarter = quarter,
+                grades  = grade,
+            })
+            plog("  o eval %s, %s (%s) - ", eid, date, quarter)
+            if score then
+                plog("%.2f", score)
+            else
+                plog("-")
+            end
+            plog("/%.0f [%s]", max_score, competencies or "")
+        end
+    end
+end
+
+    --
+-- score = over_max and math.random() * max_score or math.random() * max_score * 1.1
+io.write(string.format("\n"))
+
+--print("\nAdding categories rules...")
+--for category in pairs(categories) do
+--    tgc:add_category_rule({
+--        name          = category,
+--        coefficient   = math.random() * 5,
+--        mandatory     = true_or_false(),
+--        category_mean = true_or_false(),
+--    })
+--end
+
+--------------------------------------------------------------------------------
+
+--local function find_student()
+--    repeat
+--        plog("Un prénom d’élève à chercher ? ")
+--        local name_p = io.read()
+--
+--        if name_p and not string.find(name_p, "$%s*$") then
+--            local sid = tgc:find_student(name_p)
+--            if sid then
+--                local lastname, name = tgc:get_student_name(sid)
+--                local gender = tgc:get_student_gender(sid)
+--                plog("Found: %s %s, %s (id: %d) \n", lastname, name, gender, sid)
+--            else
+--                plog("%s not found.\n", name_p)
+--            end
+--        end
+--    until name_p == nil or string.find(name_p, "^%s*$")
+--end
+--
+--find_student()
+
 print("\nFinding students by Names...")
-for i = 1, #names do
-    local name_p = string.gsub(names[i], "^%a", string.upper)
+local students_found = 0
+while students_found < 10 do
+    local name_p = random_tuple()
     -- io.write(lastname_p .. " ")
     local sid = tgc:find_student("*", name_p)
     if sid then
@@ -234,12 +405,14 @@ for i = 1, #names do
         local gender = tgc:get_student_gender(sid)
         local class, group = tgc:get_student_class(sid)
         io.write(string.format("Found: %d - %s %s (%s), %s g: %s for pattern \"%s\"\n", sid, lastname, name, gender, class, group, name_p))
+        students_found = students_found + 1
     end
 end
 
 print("\nFinding students by Class...")
-for level = 3, 5 do
-    local class_p = level .. "e.*"
+students_found = 0
+while students_found < 10 do
+    local class_p = random_class()
     -- io.write(lastname_p .. " ")
     local sid = tgc:find_student("*", "*", class_p)
     if sid then
@@ -247,12 +420,14 @@ for level = 3, 5 do
         local gender = tgc:get_student_gender(sid)
         local class, group = tgc:get_student_class(sid)
         io.write(string.format("Found: %d - %s %s (%s), %s g: %s for pattern \"%s\"\n", sid, lastname, name, gender, class, group, class_p))
+        students_found = students_found + 1
     end
 end
 
 print("\nFinding students by Group...")
-for i = 1, 20 do
-    local group_p = random_group(1)
+students_found = 0
+while students_found < 10 do
+    local group_p = random_group(3)
     -- io.write(lastname_p .. " ")
     local sid = tgc:find_student("*", "*", group_p)
     if sid then
@@ -260,6 +435,7 @@ for i = 1, 20 do
         local gender = tgc:get_student_gender(sid)
         local class, group = tgc:get_student_class(sid)
         io.write(string.format("Found: %d - %s %s (%s), %s, g: %s for pattern \"%s\"\n", sid, lastname, name, gender, class, group, group_p))
+        students_found = students_found + 1
     end
 end
 
@@ -267,7 +443,7 @@ end
 
 print("\nFinding evaluations...")
 
-local categories = tgc:get_eval_categories_list()
+local categories = tgc:get_eval_types_list()
 print("Categories: ", table.concat(categories, ", "))
 
 print("Search by categories, number and class...")
@@ -283,9 +459,9 @@ for c = 0, #categories do
                 if eid then
                     io.write(string.format("Searching for \"%s\" title pattern, \"%s\" class pattern and %s category…\n",
                     title_p, class, categories[c] or nil))
-                    local number, category, class, title = tgc:get_eval_infos(eid)
-                    io.write(string.format("  - found: %d - %s [%s] for class %s.\n",
-                    eid, title, category, class))
+                    local _, category, class, title = tgc:get_eval_infos(eid)
+                    io.write(string.format("  - found: %s [%s] for class %s.\n",
+                    title, category, class))
                 end
             end
         end
@@ -305,26 +481,41 @@ tgc:plog()
 --     local number, category, class, title         = tgc:get_eval_infos(eid)
 --     local max_score, over_max                    = tgc:get_eval_score_infos(eid)
 --     -- local competency_mask, competency_score_mask = tgc:get_eval_competency_infos(eid)
--- 
+--
 --     print(string.format("%s> Eval. n. %2d (%s), cat. %s %q (%s) [%s] /%d%s",
 --         "By hand", number, class, category, title,
 --         "-", "-",
 --         -- competency_mask, competency_score_mask,
 --         max_score, over_max and "[+]" or ""))
 -- end
--- 
+--
 -- print("Students:")
 -- for sid in tgc:next_student() do
 --     local lastname, name = tgc:get_student_name(sid, "no")
 --     local lastname_s, name_s = tgc:get_student_name(sid, "all")
 --     local lastname_h, name_h = tgc:get_student_name(sid, "hard")
---     local _, _, class, increased_time, place = tgc:get_student_infos(sid)
+--     local _, _, class, extra_time, place = tgc:get_student_infos(sid)
 --     print(string.format("%s> Name: %s %s (%s %s [%s %s]), %s (place: %2s, time+: %s)",
 --         "By hand",
 --         lastname, name, lastname_s, name_s, lastname_h, name_h,
---         class, place, increased_time and "yes" or "no"))
+--         class, place, extra_time and "yes" or "no"))
 -- end
 
 print("\nWriting database...")
 tgc:write("notes.lua")
 print("\nNo error found!")
+
+-- TODO clean exit of the database
+print("\n\n\n-------------------------------------------------------------\n\n\n")
+print("\nReading database...")
+tgc = nil
+tgc = require "tgc"
+tgc = tgc.init()
+tgc:load("notes.lua")
+print("\nNo error found!")
+print("\nPlog !")
+tgc:plog()
+print("\nWriting database...")
+tgc:write("notes-02.lua")
+print("\nNo error found!")
+

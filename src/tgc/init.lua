@@ -11,8 +11,9 @@
 
 local Student       = require "tgc.student"
 local Eval          = require "tgc.eval"
-local Category_rule = require "tgc.catrule"
+--local Category_rule = require "tgc.catrule"
 local utils         = require "tgc.utils"
+local DEBUG         = utils.DEBUG
 
 table.binsert = utils.binsert
 
@@ -25,13 +26,7 @@ local Tgc = {
     _COPYRIGHT        = "Copyright (c) 2019 Romain Diss",
     _LICENSE          = "GNU/GPL",
     _DESCRIPTION      = "A try to handle evaluation by competency",
-    _VERSION          = "TgC 0.2.0",
-
-    -- Database tables.
-    students          = {},
-    classes           = {},
-    evaluations       = {},
-    categories_rules  = {},
+    _VERSION          = "TgC 0.3.0",
 }
 
 local Tgc_mt = {
@@ -41,7 +36,15 @@ local Tgc_mt = {
 --------------------------------------------------------------------------------
 -- Create a Tgc object.
 function Tgc.init ()
-    return setmetatable({}, Tgc_mt)
+    local t = setmetatable({}, Tgc_mt)
+
+    -- Database tables.
+    t.students          = {}
+    t.classes           = {}
+    t.groups            = {}
+    t.evaluations       = {}
+
+    return t
 end
 
 --------------------------------------------------------------------------------
@@ -61,7 +64,6 @@ function Tgc:load (filename)
     -- function entry (s) self:add_student(s) end -- for compatibility
     function student_entry (s) self:add_student(s) end
     function evaluation_entry (s) self:add_eval(s) end
-    function category_rule_entry (s) self:add_category_rule(s) end
 
     -- Processes database file.
     dofile(filename)
@@ -75,12 +77,12 @@ function Tgc:write (filename)
     f, msg = io.open(filename, "w")
     if not f then return nil, msg end
 
-    for _, c in ipairs(self.categories_rules) do
-        c:write(f)
-    end
+    f:write(string.format("-- %s\n", self._VERSION))
+    f:write("\n-- Evaluations\n")
     for _, e in ipairs(self.evaluations) do
         e:write(f)
     end
+    f:write("\n-- Students\n")
     for _, s in ipairs(self.students) do
         s:write(f)
     end
@@ -124,18 +126,27 @@ end
 function Tgc:add_student (o)
     o = o or {}
 
+    -- Have to pass the evaluation table to create results
+    o.evaluations = self.evaluations
+
     local s = Student.new(o)
     table.binsert(self.students, s) -- Binary insertion.
 
     -- Add class to the database list.
     if not self:is_class_exist(o.class) then
-        table.binsert(self.classes, o.class)
+        table.insert(self.classes, o.class)
+    end
+
+    -- Same for groups
+    if not self:is_group_exist(o.group) then
+        table.insert(self.groups, o.group)
     end
 end
 
 --------------------------------------------------------------------------------
 -- Removes a student from the database.
 -- @param sid the index of the student to remove
+-- FIXME: doesn't work yet
 function Tgc:remove_student (sid)
     if self.students[sid] then
         table.remove(self.students, sid)
@@ -163,8 +174,8 @@ function Tgc:find_student(lastname_p, name_p, class_p)
     if not class_p or class_p == "*" then class_p = ".*" end
 
     for sid, s in ipairs(self.students) do
-        if string.match(s.lastname,lastname_p)
-            and string.match(s.name,name_p)
+        if string.match(string.lower(s.lastname), string.lower(lastname_p))
+            and string.match(string.lower(s.name), string.lower(name_p))
             and s:is_in_class(class_p) then
             return sid
         end
@@ -178,11 +189,12 @@ end
 -- Returns `nil` if the index is not correct.
 -- See Student
 -- @param sid the student index
--- @return lastname, name, class, increased_time, place
+-- @return lastname, name, class, extra_time, place
+-- FIXME: to remove?
 function Tgc:get_student_infos (sid)
     local s = self.students[sid]
 
-    if s then return s.lastname, s.name, s.class, s.increased_time, s.place
+    if s then return s.lastname, s.name, s.class, s.extra_time, s.place
     else return nil end
 end
 
@@ -239,11 +251,12 @@ end
 --------------------------------------------------------------------------------
 -- Gets the students adjustments.
 -- @param sid the student index
--- @return increased_time, or nil
+-- @return extra_time, or nil
+-- FIXME: change to extra_time
 function Tgc:get_student_adjustments (sid)
     local s = self.students[sid]
 
-    if s then return s.increased_time
+    if s then return s.extra_time
     else return nil end
 end
 
@@ -263,9 +276,9 @@ function Tgc:set_student_place (sid, place)
     local s = self.students[sid]
     if s then s:update({place = place}) end
 end
-function Tgc:set_student_increased_time (sid, increased_time)
+function Tgc:set_student_extra_time (sid, extra_time)
     local s = self.students[sid]
-    if s then s:update({increased_time = increased_time}) end
+    if s then s:update({extra_time = extra_time}) end
 end
 
 --------------------------------------------------------------------------------
@@ -287,8 +300,9 @@ end
 -- @param sid the student index in database
 -- @param q[opt] filter by quarter `q`
 -- @return the result's number and category
+-- FIXME: quarter doesn't work
 function Tgc:next_student_result (sid, q)
-    q = tonumber(q) or nil
+    local q = tonumber(q) or nil
 
     local s = self.students[sid]
     if not s then return nil end
@@ -307,23 +321,55 @@ end
 
 --------------------------------------------------------------------------------
 -- Adds a new student's result.
+-- @param sid the student index
+-- @param eid the eval index
+-- @param[opt=nil] subeid the index of a subevaluation
 -- @param o the result's attributes (see Result class)
-function Tgc:add_student_result (sid, o)
+function Tgc:add_student_result (sid, eid, subeid, o)
+    local o = o or nil
+    -- If the function only have 3 args (subeid optional)
+    if o == nil and (type(subeid) == "table" or subeid == nil) then
+        o, subeid = subeid or {}, nil
+    end
     local s = self.students[sid]
-    if not s then return nil end
 
+    -- Check if student exists
+    if not s then
+        return nil -- TODO error msg
+    end
+
+    -- Check if eval exists
+    local e
+    if self.evaluations[eid] and subeid then
+        e = self.evaluations[eid].subevals[subeid] or nil
+    else
+        e = self.evaluations[eid]
+    end
+
+    if not e then
+        return nil -- TODO error msg
+    end
+
+    -- Add date and quarter infos for this class and evaluation.
+    local class = s:get_class()
+    e:add_result(class, o.date, o.quarter)
+
+    -- Eventually, adds the result
+    o.eval = e
     return s:add_result(o)
 end
 
+--------------------------------------------------------------------------------
 -- Removes a student result from the database.
--- FIXME: Do not work!!
 -- @param sid the index of the student
+-- FIXME: Doesn't work
 function Tgc:remove_student_result (sid, ...)
     local s = self.students[sid]
     if s then table.remove(self.students, sid) end
 end
 
 -- Returns informations concerning a student's result.
+-- FIXME: used?
 function Tgc:get_student_result_infos (sid, title_p, category)
     local s = self.students[sid]
     if not s then return nil end
@@ -334,35 +380,35 @@ function Tgc:get_student_result_infos (sid, title_p, category)
     local title, max_score, over_max = nil, nil, nil
 
     --TODO: local _, _, quarter, date =
-
 end
 
 
 --------------------------------------------------------------------------------
 -- Category rule stuff.
 -- @section category
+-- FIXME: to remove
 --------------------------------------------------------------------------------
 
---------------------------------------------------------------------------------
--- Adds a new category rule to the database.
--- @param o the category rule attributes (see Category_rule class)
-function Tgc:add_category_rule (o)
-    o = o or {}
-
-    local c = Category_rule.new(o)
-    table.insert(self.categories_rules, c)
-end
-
--- Gets the category rule informations
--- @param catname the name of the category
-function Tgc:get_category_rule_infos (catname)
-    for _, category in ipairs(self.categories_rules) do
-        local name, coefficient, mandatory, category_mean = category:get_infos()
-        if catname == name then
-            return coefficient, mandatory, category_mean
-        end
-    end
-end
+----------------------------------------------------------------------------------
+---- Adds a new category rule to the database.
+---- @param o the category rule attributes (see Category_rule class)
+--function Tgc:add_category_rule (o)
+--    o = o or {}
+--
+--    local c = Category_rule.new(o)
+--    table.insert(self.categories_rules, c)
+--end
+--
+---- Gets the category rule informations
+---- @param catname the name of the category
+--function Tgc:get_category_rule_infos (catname)
+--    for _, category in ipairs(self.categories_rules) do
+--        local name, coefficient, mandatory, category_mean = category:get_infos()
+--        if catname == name then
+--            return coefficient, mandatory, category_mean
+--        end
+--    end
+--end
 
 
 
@@ -371,35 +417,109 @@ end
 -- @section evals
 --------------------------------------------------------------------------------
 
---------------------------------------------------------------------------------
--- Iterator that traverses evaluations of a class.
--- @param class_p acclass pattern
--- @usage for eid in tgc:next_eval() do ... end
-function Tgc:next_eval (class_p)
-    class_p = (type(class_p) == "string") and class_p or ".*"
 
+-- Iterator that traverses evaluations of a class.
+-- @param class class
+-- @usage for eid in tgc:next_eval() do ... end
+function Tgc:next_eval (class)
     local i = 0
     return function ()
         repeat
             i = i + 1
             local e = self.evaluations[i]
-            if not e then return nil end
-            local _, _, class = e:get_infos()
+            if not e then
+                return nil
+            end
+            local class_p = e:get_class_p()
         until string.match(class, class_p)
         return i
     end
 end
 
 --------------------------------------------------------------------------------
--- Adds an evaluation to the list of all the evaluation in the database.
--- Uses a binary insertion so the `evaluations` table is always sorted.
+-- Checks if an evaluation exists.
+-- @param eid the evaluation index
+-- @return the evaluation index
+function Tgc:is_eval_exist(eid, subeid)
+    -- TODO
+end
+
+--------------------------------------------------------------------------------
+-- Checks if an evaluation have subevals.
+-- TODO: handle subsubevals?
+-- @param eid the evaluation index
+-- @return true or false
+function Tgc:has_subevals(eid)
+    local e = self.evaluations[eid]
+    if e then
+        return e:get_last_subeval_index() > 0 and true or false
+    else
+        return false
+    end
+end
+
+--------------------------------------------------------------------------------
+-- Get a unused id for a new evaluation.
+-- @return an unused index
+function Tgc:get_unused_eval_id ()
+    local i = 1
+    while true do
+        if not self.evaluations[i] then
+            return i
+        end
+        i = i + 1
+    end
+end
+
+--------------------------------------------------------------------------------
+-- Get the last subeval id
+-- @param eid the eval index
+-- @return an unused index or nul if the eval has no sub eval
+function Tgc:get_last_eval_subid (eid)
+    local e = self.evaluations[eid]
+
+    if e then
+        return e:get_last_subeval_index()
+    else
+        return nil
+    end
+end
+
+--------------------------------------------------------------------------------
+-- Adds an evaluation to the list of all the evaluations in the database.
+-- The index is the evaluation id (and should be unique).
 -- @param o the eval attributes
 -- @see Eval
+-- FIXME return id or something else?
 function Tgc:add_eval (o)
-    o = o or {}
-    local e = Eval.new(o)
+    local o = o or {}
 
-    table.binsert(self.evaluations, e) -- Binary insertion.
+    -- Make sure the eval has an id
+    o.id = o.id or self:get_unused_eval_id()
+
+    local e = Eval.new(o)
+    self.evaluations[e.id] = e
+
+    return e.id
+end
+
+--------------------------------------------------------------------------------
+-- Adds a sub part for an evaluation.
+-- The index must be the one of an existing evaluation
+-- @param eid the parent evaluation id
+-- @param o the subeval attributes
+-- @see Eval
+function Tgc:add_subeval (eid, o)
+    local o = o or {}
+    local e = self.evaluations[eid]
+
+    if e then
+        o.id = e:get_last_subeval_index() + 1
+        o.parent = e
+        return e:add_subeval(o)
+    else
+        return nil -- TODO error msg
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -417,12 +537,6 @@ function Tgc:find_eval(title_p, class, category)
 
     -- TODO: match class
     for eid, e in ipairs(self.evaluations) do
-        -- if string.match(class, e.class_p) then
-        --     print("DEBUG match!", class, e.class_p)
-        -- end
-        -- if string.match(e.title, title_p) then
-        --     print("DEBUG match!", e.title, title_p)
-        -- end
         if string.match(e.title, title_p) and string.match(class, e.class_p) then
             if not category then
                 return eid
@@ -436,12 +550,22 @@ function Tgc:find_eval(title_p, class, category)
 end
 
 --------------------------------------------------------------------------------
+-- Gets the list of the evaluation types
+-- FIXME deprecated?
+function Tgc:get_eval_types_list ()
+    return Eval.eval_types
+end
+
+--------------------------------------------------------------------------------
 -- Gets an evaluation's main informations
 function Tgc:get_eval_infos (eid)
     local e = self.evaluations[eid]
 
-    if e then return e:get_infos()
-    else return nil end
+    if e then
+        return e:get_infos()
+    else
+        return nil
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -449,8 +573,11 @@ end
 function Tgc:get_eval_score_infos (eid)
     local e = self.evaluations[eid]
 
-    if e then return e:get_score_infos()
-    else return nil end
+    if e then
+        return e:get_score_infos()
+    else
+        return nil
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -466,6 +593,7 @@ end
 -- Sets the evaluation parameters.
 -- @param eid the evaluation index
 -- @param * the parameter to set
+-- FIXME: category is deprecated
 function Tgc:set_eval_category (eid, category)
     local e = self.evaluations[eid]
     if e then e:update({category = category}) end
@@ -486,33 +614,13 @@ end
 --------------------------------------------------------------------------------
 -- Returns the number of evaluations.
 function Tgc:get_evaluations_number ()
-    return #self.evaluations
-end
-
---------------------------------------------------------------------------------
--- Returns the list of the evaluations categories.
--- TODO: Optimize this.
-function Tgc:get_eval_categories_list ()
-    local categories = {}
-
-    -- Collects all the categories.
-    for _, e in pairs(self.evaluations) do
-        local _, category = e:get_infos()
-        local category_found = false
-        -- Checks if the category is already in the list.
-        for _, c in pairs(categories) do
-            if category == c then
-                category_found = true
-                break
-            end
-        end
-        if not category_found then
-            table.binsert(categories, category)
-        end
+    local n = 0
+    for _, _ in pairs(self.evaluations) do
+        n = n + 1
     end
-
-    return categories
+    return n
 end
+
 
 --------------------------------------------------------------------------------
 -- Classes stuff.
@@ -544,6 +652,59 @@ function Tgc:get_classes_list (pattern)
 end
 
 --------------------------------------------------------------------------------
+-- Returns the list of the groups in the database.
+-- The list is not sorted.
+-- @param[opt=".*"] pattern to filter groups
+-- @return a table of the matching groups (default: all) or `nil` if no
+-- class is found
+function Tgc:get_groups_list (pattern)
+    pattern = tostring(pattern or ".*")
+
+    local groups = {}
+    for _, group in pairs(self.groups) do
+        if string.match(group, pattern) then
+            table.binsert(groups, group)
+        end
+    end
+
+    -- Return nil if no class is found.
+    if next(groups) then
+        return groups
+    else
+        return nil
+    end
+end
+
+--------------------------------------------------------------------------------
+-- Returns the list of the  classes groups in the database.
+-- The list is not sorted.
+-- @param[opt=".*"] pattern to filter classes and groups
+-- @return a table of the matching classes and groups (default: all) or `nil`
+-- if none is found
+function Tgc:get_classes_and_groups_list (pattern)
+    pattern = tostring(pattern or ".*")
+
+    local c_and_g = {}
+    for _, group in pairs(self.groups) do
+        if string.match(group, pattern) then
+            table.binsert(c_and_g, group)
+        end
+    end
+    for _, class in pairs(self.classes) do
+        if string.match(class, pattern) then
+            table.binsert(c_and_g, class)
+        end
+    end
+
+    -- Return nil if no class is found.
+    if next(c_and_g) then
+        return c_and_g
+    else
+        return nil
+    end
+end
+
+--------------------------------------------------------------------------------
 -- Checks if the class exists.
 -- @param class
 -- @return `true` if the class exists, `false` otherwise
@@ -553,6 +714,22 @@ function Tgc:is_class_exist(class)
     else
         for _, c in pairs(self.classes) do
             if c == class then return true end
+        end
+    end
+
+    return false
+end
+
+--------------------------------------------------------------------------------
+-- Checks if the group exists.
+-- @param class
+-- @return `true` if the group exists, `false` otherwise
+function Tgc:is_group_exist(group)
+    if type(group) ~= "string" then
+        return false
+    else
+        for _, g in pairs(self.groups) do
+            if g == group then return true end
         end
     end
 

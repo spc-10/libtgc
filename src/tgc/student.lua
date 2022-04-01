@@ -9,6 +9,7 @@
 local Result   = require "tgc.result"
 local Eval     = require "tgc.eval"
 local utils    = require "tgc.utils"
+local DEBUG    = utils.DEBUG
 
 local strip_accents = utils.strip_accents
 table.binsert = utils.binsert
@@ -24,7 +25,7 @@ local Student_mt = {
 
 ---------------------------------------------------------------------------------
 -- Compare two Students like `comp` in `table.sort`.
--- @return true if a < b considering the alphabetic order of 
+-- @return true if a < b considering the alphabetic order of
 -- `lastname` and then `name`.
 -- @see also https://stackoverflow.com/questions/37092502/lua-table-sort-claims-invalid-order-function-for-sorting
 function Student_mt.__lt (a, b)
@@ -51,20 +52,18 @@ end
 --      o.name (string)
 --      o.class (string)
 --      o.place (number) *optional*
---      o.increased_time (number) *optional* PAP
+--      o.extra_time (number) *optional* PAP
 --      o.results (Result[]) -
 --      o.reports (Report[]) -
 -- @return s student class or nil if parameters are incorrect
 function Student.new (o)
     local s = setmetatable({}, Student_mt)
 
-    -- Make sure the student get non empty name, lastname and class!
-    if not o.lastname or not o.name or not o.class
-        or string.find(o.lastname, "^%s*$")
-        or string.find(o.name, "^%s*$")
-        or string.find(o.class, "^%s*$") then
-        return nil
-    end
+    -- Make sure the student get non empty name and lastname!
+    assert(o.lastname and o.name
+        and not string.find(o.lastname, "^%s*$")
+        and not string.find(o.name, "^%s*$"),
+        "student must have name lastname")
 
     -- Main student attributes
     s.lastname       = o.lastname
@@ -72,27 +71,21 @@ function Student.new (o)
     s.gender         = o.gender
     s.class          = o.class
     s.group          = o.group
-    s.increased_time = o.increased_time
+    s.extra_time     = o.extra_time
     s.place          = tonumber(o.place)
 
     -- Create the evaluation results
     s.results = {}
     if o.results and type(o.results) == "table" then
-        for n = 1, #o.results do
-            table.binsert(s.results, Result.new(o.results[n]))
-        end
-    end
-
-    -- Creates the reports (after some checks)
-    -- TODO
-    s.reports = {}
-    if o.reports and type(o.reports) == "table" then
-        for n = 1, #o.reports do
-            if type(o.reports[n]) == "table" then
-                local already_exists = s:add_report(o.reports[n])
-                msg = "Error: %s %s can not have two reports the same quarter.\n"
-                assert(not already_exists, msg:format(s.lastname, s.name))
+        for _, result in ipairs(o.results) do
+            -- Have to find the associated eval...
+            local eid = result.eval_id
+            local e = o.evaluations[eid]
+            if not e then
+                return nil -- TODO error msg
             end
+            result.eval = e
+            s.results[eid] = Result.new(result)
         end
     end
 
@@ -104,6 +97,7 @@ end
 -- @param o (table) - table containing the student attributes.
 -- @see Student.new()
 -- @return true if an attribute has been updated
+-- FIXME update to the new API
 function Student:update (o)
     o = o or {}
     local update_done = false
@@ -134,8 +128,8 @@ function Student:update (o)
         self.group = o.group
         update_done = true
     end
-    if tonumber(increased_time) then
-        self.increased_time = tonumber(o.increased_time)
+    if tonumber(extra_time) then
+        self.extra_time = tonumber(o.extra_time)
         update_done = true
     end
     if tonumber(o.place) then
@@ -151,44 +145,35 @@ end
 -- @param f file (open for writing)
 function Student:write (f)
     -- Opening
-    f:write("student_entry{\n\t")
+    f:write("student_entry{\n    ")
 
     -- Student attributes
-    f:write(string.format("lastname = %q, ",           self.lastname))
-    f:write(string.format("name = %q, ",               self.name))
-    f:write(string.format("gender = %q, ",             self.gender))
-    f:write(string.format("class = %q, ",              self.class))
+    f:write(string.format("lastname = %q,",            self.lastname))
+    f:write(string.format(" name = %q,",               self.name))
+    if self.gender then
+        f:write(string.format(" gender = %q,",         self.gender))
+    end
+    f:write("\n    ")
+    f:write(string.format("class = %q,",               self.class))
     if self.group then
-        f:write(string.format("group = %q, ",          self.group))
+        f:write(string.format(" group = %q,",          self.group))
     end
     if self.place then
-        f:write(string.format("place = %q, ",          self.place))
+        f:write(string.format(" place = %d,",          self.place))
     end
-    if self.increased_time then
-        f:write("\n\t")
-        f:write(string.format("increased_time = %q, ", self.increased_time))
+    if self.extra_time then
+        f:write("\n    ")
+        f:write(string.format("extra_time = %d,",      self.extra_time))
     end
     f:write("\n")
 
     -- Only print non empty results
     if next(self.results) then
-        f:write("\tresults = {\n")
+        f:write("    results = {\n")
         for _, result in pairs(self.results) do
             result:write(f)
         end
-        f:write("\t},\n")
-    end
-
-    -- Reports
-    -- TODO
-    if next(self.reports) then
-        f:write("\treports = {\n")
-        for i, report in ipairs(self.reports) do
-            f:write(string.format("\t\t{quarter = %q,\n", i))
-            f:write(string.format("\t\t\tresult = %q, ", tostring(report.result)))
-            f:write(string.format("score = %q},\n", report.score or nil))
-        end
-        f:write("\t},\n")
+        f:write("    },\n")
     end
 
     -- Close
@@ -202,17 +187,27 @@ end
 -- @param check_group[opt=true] also check in groups if true
 -- @return true or false
 -- @fixme change the defautl pattern?
+-- FIXME check_group doesn't work
 function Student:is_in_class (class_p, check_group)
     local class_p = class_p and tostring(class_p) or ".*"
     local group = group or true
 
-    if string.match(self.class, class_p) then
+    if not self.class then
+        return false
+    elseif string.match(self.class, class_p) then
         return true
     elseif self.group and string.match(self.group, class_p) then
         return true
     else
         return false
     end
+end
+
+--------------------------------------------------------------------------------
+-- Get the class and group of a student.
+-- @return class, group
+function Student:get_class ()
+    return self.class, self.group
 end
 
 --------------------------------------------------------------------------------
@@ -236,7 +231,7 @@ function Student:get_name (style)
         return space .. string.upper(string.sub(s, 1, 1)) .. "."
     end
 
-    -- TODO check style...
+    -- Format names according to the style
     if style == "name" or style == "all" then
         name = string.gsub(name, "([%-%s])([^%-%s%.][^%-%s%.]*)", first_upper_dot)
     end
@@ -255,19 +250,16 @@ end
 -- Gets the students gender.
 -- @return gender (female, male or other by default)
 function Student:get_gender ()
-    if string.match(self.gender, "[fF]") then
+    local gender = tostring(self.gender)
+
+    if string.match(gender, "[fF]") then
         return "female"
-    elseif string.match(self.gender, "[mM]") then
+    elseif string.match(gender, "[mM]") then
         return "male"
     else
         return "other"
     end
 end
-
----------------------------------------------------------------------------------
--- TODO: eval and reports getters...
---function Student:get_results ()        return self.results end
---function Student:get_reports ()        return self.reports end
 
 
 --------------------------------------------------------------------------------
@@ -278,11 +270,45 @@ end
 ---------------------------------------------------------------------------------
 -- Add an evaluation result in the student's corresponding list.
 -- @param o the evaluation result attributes table
--- @return result class or nil if no result is added
 function Student:add_result (o)
-    local new = Result.new(o)
-    table.binsert(self.results, Result.new(o))
-    return new
+    local o = o or {}
+    local e = o.eval
+
+    assert(e, "Cannot add a result with no associated evaluation to a student")
+
+    -- Get the result correspond to the eval ids.
+    local eid, subeid = e:get_ids()
+    local r = self:get_result(eid, subeid)
+
+    -- If a result already exists, we add the new one to the existing one if
+    -- the eval allows multiple attempts.
+    if r then
+        return r:add_result(o)
+    -- Otherwise, we create the new result.
+    else
+        -- If the eval is not a subeval, we just create it.
+        if not subeid then
+            self.results[eid] = Result.new(o)
+            return -- return something?
+        else
+        -- If it is a subeval, we first create the parent eval if it doesn't exist.
+            self.results[eid] = self.results[eid] or Result.new({eval = e.parent})
+            self.results[eid].subresults = self.results[eid].subresults or {}
+            self.results[eid].subresults[subeid] = Result.new(o)
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Get the results corresponding to an evaluation id and subid.
+-- @param eid the evaluation id
+-- @param subeid the subevaluation id
+function Student:get_result (eid, subeid)
+    if subeid then
+        return self.results[eid] and self.results[eid].subresults[subeid]
+    else
+        return self.results[eid]
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -301,12 +327,16 @@ function Student:plog (prompt_lvl)
     utils.plog("%sName: %s - Lastname %s (%s)\n" , prompt, name, lastname, self:get_gender())
     utils.plog("%s%s- class: %s (%s)\n", tab, prompt, self.class, self.group or "no group")
     utils.plog("%s%s- place: %s\n", prompt, tab, self.place or "none")
-    utils.plog("%s%s- increased time: × %.2f\n", prompt, tab, self.increased_time or 1)
+    if self.extra_time then
+        utils.plog("%s%s- extra time: +%d/100\n", prompt, tab, self.extra_time)
+    else
+        utils.plog("%s%s- no extra time\n", prompt, tab)
+    end
 
     if self.results then
         utils.plog("%s%s- results:\n", prompt, tab)
     end
-    for _, r in ipairs(self.results) do
+    for _, r in pairs(self.results) do
         r:plog(prompt_lvl + 2)
     end
 end
