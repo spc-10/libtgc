@@ -399,13 +399,15 @@ local students_found = 0
 while students_found < 10 do
     local name_p = random_tuple()
     -- io.write(lastname_p .. " ")
-    local sid = tgc:find_student("*", name_p)
-    if sid then
-        local lastname, name = tgc:get_student_name(sid)
-        local gender = tgc:get_student_gender(sid)
-        local class, group = tgc:get_student_class(sid)
-        io.write(string.format("Found: %d - %s %s (%s), %s g: %s for pattern \"%s\"\n", sid, lastname, name, gender, class, group, name_p))
-        students_found = students_found + 1
+    local sids = tgc:find_students("*", name_p)
+    if sids then
+        for _, sid in ipairs(sids) do
+            local lastname, name = tgc:get_student_name(sid)
+            local gender = tgc:get_student_gender(sid)
+            local class, group = tgc:get_student_class(sid)
+            io.write(string.format("Found: %d - %s %s (%s), %s g: %s for pattern \"%s\"\n", sid, lastname, name, gender, class, group, name_p))
+            students_found = students_found + 1
+        end
     end
 end
 
@@ -414,13 +416,15 @@ students_found = 0
 while students_found < 10 do
     local class_p = random_class()
     -- io.write(lastname_p .. " ")
-    local sid = tgc:find_student("*", "*", class_p)
-    if sid then
-        local lastname, name = tgc:get_student_name(sid)
-        local gender = tgc:get_student_gender(sid)
-        local class, group = tgc:get_student_class(sid)
-        io.write(string.format("Found: %d - %s %s (%s), %s g: %s for pattern \"%s\"\n", sid, lastname, name, gender, class, group, class_p))
-        students_found = students_found + 1
+    local sids = tgc:find_students("*", "*", class_p)
+    if sids then
+        for _, sid in ipairs(sids) do
+            local lastname, name = tgc:get_student_name(sid)
+            local gender = tgc:get_student_gender(sid)
+            local class, group = tgc:get_student_class(sid)
+            io.write(string.format("Found: %d - %s %s (%s), %s g: %s for pattern \"%s\"\n", sid, lastname, name, gender, class, group, class_p))
+            students_found = students_found + 1
+        end
     end
 end
 
@@ -429,19 +433,22 @@ students_found = 0
 while students_found < 10 do
     local group_p = random_group(3)
     -- io.write(lastname_p .. " ")
-    local sid = tgc:find_student("*", "*", group_p)
-    if sid then
-        local lastname, name = tgc:get_student_name(sid)
-        local gender = tgc:get_student_gender(sid)
-        local class, group = tgc:get_student_class(sid)
-        io.write(string.format("Found: %d - %s %s (%s), %s, g: %s for pattern \"%s\"\n", sid, lastname, name, gender, class, group, group_p))
-        students_found = students_found + 1
+    local sids = tgc:find_students("*", "*", group_p)
+    if sids then
+        for _, sid in ipairs(sids) do
+            local lastname, name = tgc:get_student_name(sid)
+            local gender = tgc:get_student_gender(sid)
+            local class, group = tgc:get_student_class(sid)
+            io.write(string.format("Found: %d - %s %s (%s), %s, g: %s for pattern \"%s\"\n", sid, lastname, name, gender, class, group, group_p))
+            students_found = students_found + 1
+        end
     end
 end
 
 --------------------------------------------------------------------------------
 
-print("\nFinding evaluations...")
+print("\n\nFinding evaluations...")
+print("--------------------------------------------------------------------------------\n")
 
 local categories = tgc:get_eval_types_list()
 print("Categories: ", table.concat(categories, ", "))
@@ -449,20 +456,18 @@ print("Categories: ", table.concat(categories, ", "))
 print("Search by categories, number and class...")
 title_p = "val"
 
-for c = 0, #categories do
-    for N = 3, 5 do
-        for M = 1, 10 do
-        local class = N .. "e" .. M
-            for n = 1, 10 do
-                local title_p = n .. ".*"
-                local eid = tgc:find_eval(title_p, class, categories[c] or nil)
-                if eid then
-                    io.write(string.format("Searching for \"%s\" title pattern, \"%s\" class pattern and %s category…\n",
-                    title_p, class, categories[c] or nil))
-                    local _, category, class, title = tgc:get_eval_infos(eid)
-                    io.write(string.format("  - found: %s [%s] for class %s.\n",
-                    title, category, class))
-                end
+for N = 3, 5 do
+    local class = N .. "e.*"
+    for n = 1, 10 do
+        local title_p = n .. ".*"
+        local eids = tgc:find_evals(title_p, class)
+        if eids then
+            io.write(string.format("Searching for \"%s\" title pattern, \"%s\" class pattern…\n",
+                title_p, class))
+            for _, eid in ipairs(eids) do
+                local _, class, title, subtitle = tgc:get_eval_infos(eid)
+                io.write(string.format("  - found: %s (%s) for class %s.\n",
+                title, subtitle, class))
             end
         end
     end

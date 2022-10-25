@@ -154,34 +154,27 @@ function Tgc:remove_student (sid)
 end
 
 --------------------------------------------------------------------------------
--- Finds a student.
--- Warning: in case of multiple matchings, the function only returns the first
--- match.
+-- Finds students.
 -- One can use "*" as special pattern to match everything (shortcut for ".*").
--- @param lastname_p[opt=".*"] lastname pattern
--- @param name_p[opt=".*"] name pattern
+-- @param name_p[opt=".*"] fullname pattern
 -- @param class_p[opt=".*"] class pattern
--- @return the index of the student
+-- @return the list of indexs of the students
 -- @fixme replace string.match by a method in student class
-function Tgc:find_student(lastname_p, name_p, class_p)
-    -- Check if arguments are valid
-    if not lastname_p and not name_p and not class_p then
-        return nil
-    end
+function Tgc:find_students(fullname_p, class_p)
+    local sids = {}
+
     -- Default patterns
-    if not lastname_p or lastname_p == "*" then lastname_p = ".*" end
-    if not name_p or name_p == "*" then name_p = ".*" end
+    if not fullname_p or fullname_p == "*" then fullname_p = ".*" end
     if not class_p or class_p == "*" then class_p = ".*" end
 
     for sid, s in ipairs(self.students) do
-        if string.match(string.lower(s.lastname), string.lower(lastname_p))
-            and string.match(string.lower(s.name), string.lower(name_p))
+        if string.match(string.lower(s:get_fullname()), string.lower(fullname_p))
             and s:is_in_class(class_p) then
-            return sid
+            table.insert(sids, sid)
         end
     end
 
-    return nil -- not found.
+    return next(sids) and sids or nil
 end
 
 --------------------------------------------------------------------------------
@@ -376,10 +369,17 @@ function Tgc:get_student_result_infos (sid, title_p, category)
 
     -- Finds the corresponding evaluation.
     local _, _, class = s:get_infos()
-    local eval_idx = self:find_eval(title_p, class, category)
+    local eval_idx = self:find_evals(title_p, class, category) -- FIXME: find_evals returns a table
     local title, max_score, over_max = nil, nil, nil
 
     --TODO: local _, _, quarter, date =
+end
+
+--------------------------------------------------------------------------------
+-- Prints the database informations about a student.
+function Tgc:plog_student (sid)
+    local s = self.students[sid]
+    s:plog()
 end
 
 
@@ -523,30 +523,28 @@ function Tgc:add_subeval (eid, o)
 end
 
 --------------------------------------------------------------------------------
--- Find an evaluation.
+-- Find evaluations.
 -- @param title_p a title pattern
--- @param class a class which which did the evaluation
--- @param category[opt=] optional category (use class default)
--- @return the index of the evaluation. It returns the first matching eval
--- (does not check for multiple matchs).
-function Tgc:find_eval(title_p, class, category)
-    -- Check if arguments are valid.
-    if not title_p or not class then
-        return nil
-    end
+-- @param class a class which made the evaluation
+-- @param eval_type[opt="parent"] only search in parent, subeval or both evaluations
+-- @return a list of indexes of the evaluations.
+-- TODO: search in subevals too...
+function Tgc:find_evals(title_p, class_p)
+    local eids = {}
 
-    -- TODO: match class
-    for eid, e in ipairs(self.evaluations) do
-        if string.match(e.title, title_p) and string.match(class, e.class_p) then
-            if not category then
-                return eid
-            elseif category and self.category == category then
-                return eid
-            end
+    -- Default patterns
+    if not title_p or title_p == "*" then title_p = ".*" end
+    if not class_p or class_p == "*" then class_p = ".*" end
+
+    for eid, e in pairs(self.evaluations) do
+        local fulltitle = e:get_fulltitle()
+        if string.match(string.lower(fulltitle), string.lower(title_p))
+            and string.match(e.class_p, class_p) then
+            table.insert(eids, eid)
         end
     end
 
-    return nil -- not found
+    return next(eids) and eids or nil
 end
 
 --------------------------------------------------------------------------------
