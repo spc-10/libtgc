@@ -204,6 +204,14 @@ function Tgc:get_student_name (sid, style)
     else return nil end
 end
 
+function Tgc:get_student_fullname (sid, style)
+    local s = self.students[sid]
+    local style = style or "no"
+
+    if s then return s:get_fullname(style)
+    else return nil end
+end
+
 --------------------------------------------------------------------------------
 -- Gets the students gender.
 -- @param sid the student index
@@ -567,6 +575,18 @@ function Tgc:get_eval_infos (eid)
 end
 
 --------------------------------------------------------------------------------
+-- Gets an evaluation's full title (title + subtitle)
+function Tgc:get_eval_fulltitle (eid, sep)
+    local e = self.evaluations[eid]
+
+    if e then
+        return e:get_fulltitle(sep)
+    else
+        return nil
+    end
+end
+
+--------------------------------------------------------------------------------
 -- Gets an evaluation's score informations.
 function Tgc:get_eval_score_infos (eid)
     local e = self.evaluations[eid]
@@ -617,6 +637,13 @@ function Tgc:get_evaluations_number ()
         n = n + 1
     end
     return n
+end
+
+--------------------------------------------------------------------------------
+-- Prints the database informations about an evaluation.
+function Tgc:plog_eval (eid)
+    local e = self.evaluations[eid]
+    e:plog()
 end
 
 
