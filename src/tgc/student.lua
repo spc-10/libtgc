@@ -246,6 +246,13 @@ function Student:get_name (style)
     return name, lastname
 end
 
+function Student:get_fullname (style)
+    local style = style or "no"
+    local name, lastname = self:get_name(style)
+
+    return name .. " " .. lastname
+end
+
 --------------------------------------------------------------------------------
 -- Gets the students gender.
 -- @return gender (female, male or other by default)

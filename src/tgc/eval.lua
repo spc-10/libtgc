@@ -382,6 +382,36 @@ function Eval:get_infos ()
             self.subtitle or psubtitle
     end
 end
+
+-- Returns the evaluation's titles.
+-- Subevals inherits from its parent eval
+-- @return title, subtitle
+function Eval:get_title ()
+    if not self.parent then
+        return self.title, self.subtitle
+    else
+        local ptitle, psubtitle = self.parent:get_title()
+        return self.title or ptitle,
+            self.subtitle or psubtitle
+    end
+end
+
+-- Returns the evaluation's full title (title + subtitle).
+-- Subevals inherits from its parent eval
+-- @return fulltitle
+function Eval:get_fulltitle (sep)
+    local sep = sep or " "
+
+    local title, subtitle = self:get_title()
+    assert(title, "Evaluation must have a title")
+
+    if subtitle then
+        return title .. sep .. subtitle
+    else
+        return title
+    end
+end
+
 -- Returns the evaluation's score informations.
 -- Subevals inherits from its parent eval
 function Eval:get_score_infos ()
