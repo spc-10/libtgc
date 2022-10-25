@@ -110,7 +110,7 @@ function Eval.new (o)
 
     -- Assign attributes
     e.parent                  = o.parent
-    e.id                      = math.tointeger(string.match(o.id, "%d*%.*(%d+)")) -- subeval id is store as X.Y
+    e.id                      = tonumber(string.match(o.id, "%d*%.*(%d+)")) -- subeval id is store as X.Y
     e.title                   = o.title and tostring(o.title)
     e.subtitle                = o.subtitle and tostring(o.subtitle)
     e.category                = eval_type_exists(o.category) and o.category
@@ -120,10 +120,10 @@ function Eval.new (o)
     e.competencies            = o.competencies
     -- e.competency_mask         = o.competency_mask
     -- e.competency_score_mask   = o.competency_score_mask
-    e.max_score               = math.tointeger(o.max_score)
-    e.real_max_score          = math.tointeger(o.real_max_score)
+    e.max_score               = tonumber(o.max_score)
+    e.real_max_score          = tonumber(o.real_max_score)
     e.over_max                = o.over_max and true or false
-    e.success_score_pc        = math.tointeger(o.success_score_pc)
+    e.success_score_pc        = tonumber(o.success_score_pc)
 
     e.allow_multi_attempts    = o.allow_multi_attempts and true or false
 
@@ -283,6 +283,10 @@ function Eval:write (f)
             fwrite("max_score = %d,",           self.max_score)
             space = " "
         end
+        if self.real_max_score then
+            fwrite("%sreal_max_score = %d,",    space, self.real_max_score)
+            space = " "
+        end
         if self.over_max then
             fwrite("%sover_max = %q,",          space, self.over_max)
             space = " "
@@ -368,6 +372,7 @@ function Eval:get_ids ()
         return self.id, nil, self.id
     end
 end
+
 -- Returns the evaluation's main informations.
 -- Subevals inherits from its parent eval
 -- @return TODO
