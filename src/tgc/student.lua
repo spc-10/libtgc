@@ -68,9 +68,13 @@ function Student.new (o)
     -- Main student attributes
     s.lastname       = o.lastname
     s.name           = o.name
+    s.nickname       = o.nickname
     s.gender         = o.gender
     s.class          = o.class
     s.group          = o.group
+    s.dyslexia       = o.dyslexia
+    s.dyscalculia    = o.dyscalculia
+    s.enlarged_font  = o.enlarged_font
     s.extra_time     = o.extra_time
     s.place          = tonumber(o.place)
 
@@ -97,7 +101,6 @@ end
 -- @param o (table) - table containing the student attributes.
 -- @see Student.new()
 -- @return true if an attribute has been updated
--- FIXME update to the new API
 function Student:update (o)
     o = o or {}
     local update_done = false
@@ -111,6 +114,11 @@ function Student:update (o)
     if type(o.name) == "string"
         and not string.match(o.name, "^%s*$") then
         self.name = o.name
+        update_done = true
+    end
+    if type(o.nickname) == "string"
+        and not string.match(o.nickname, "^%s*$") then
+        self.nickname = o.nickname
         update_done = true
     end
     if type (o.gender) == "string"
@@ -128,8 +136,20 @@ function Student:update (o)
         self.group = o.group
         update_done = true
     end
-    if tonumber(extra_time) then
-        self.extra_time = tonumber(o.extra_time)
+    if o.extra_time then
+        self.extra_time = o.extra_time and true or nil
+        update_done = true
+    end
+    if o.dyslexia then
+        self.dyslexia = o.dyslexia and true or nil
+        update_done = true
+    end
+    if o.dyscalculia then
+        self.dyscalculia = o.dyscalculia and true or nil
+        update_done = true
+    end
+    if o.enlarged_font then
+        self.enlarged_font = o.enlarged_font and true or nil
         update_done = true
     end
     if tonumber(o.place) then
@@ -150,6 +170,9 @@ function Student:write (f)
     -- Student attributes
     f:write(string.format("lastname = %q,",            self.lastname))
     f:write(string.format(" name = %q,",               self.name))
+    if self.nickname then
+        f:write(string.format(" nickname = %q,",       self.nickname))
+    end
     if self.gender then
         f:write(string.format(" gender = %q,",         self.gender))
     end
@@ -161,9 +184,27 @@ function Student:write (f)
     if self.place then
         f:write(string.format(" place = %d,",          self.place))
     end
-    if self.extra_time then
+
+    -- Adaptations
+    local space = ""
+    if self.extra_time or self.dyslexia or self.dyscalculia or self.enlarged_font then
         f:write("\n    ")
-        f:write(string.format("extra_time = %d,",      self.extra_time))
+        if self.extra_time then
+            f:write(string.format("extra_time = %q,",  self.extra_time))
+            space = " "
+        end
+        if self.dyslexia then
+            f:write(string.format("%sdyslexia = %q,",  space, self.dyslexia))
+            space = " "
+        end
+        if self.dyscalculia then
+            f:write(string.format("%sdyscalculia = %q,", space, self.dyscalculia))
+            space = " "
+        end
+        if self.enlarged_font then
+            f:write(string.format("%senlarged_font = %q,", space, self.enlarged_font))
+            space = " "
+        end
     end
     f:write("\n")
 
@@ -222,9 +263,12 @@ end
 --  - "hard": return shorten name and lastname in full initials
 -- @param style[opt="no"] format style
 -- @return the formated name and lastname
-function Student:get_name (style)
-    local style = style or "no"
+function Student:get_name (style, nickname)
+    style = style or "no"
     local name, lastname = self.name, self.lastname
+    if nickname and self.nickname then
+        name = self.nickname
+    end
 
     -- FIXME: do not work with accentuated letters!
     local function first_upper_dot(space, s)
@@ -246,9 +290,9 @@ function Student:get_name (style)
     return name, lastname
 end
 
-function Student:get_fullname (style)
+function Student:get_fullname (style, nickname)
     local style = style or "no"
-    local name, lastname = self:get_name(style)
+    local name, lastname = self:get_name(style, nickname)
 
     return name .. " " .. lastname
 end
@@ -266,6 +310,13 @@ function Student:get_gender ()
     else
         return "other"
     end
+end
+
+--------------------------------------------------------------------------------
+-- Gets the students adaptations.
+-- @return gender (female, male or other by default)
+function Student:get_adaptations ()
+    return self.extra_time, self.dyslexia, self.dyscalculia, self.enlarged_font
 end
 
 
@@ -331,13 +382,17 @@ function Student:plog (prompt_lvl)
     local prompt = string.rep(tab, prompt_lvl)
 
     local name, lastname = self:get_name()
-    utils.plog("%sName: %s - Lastname %s (%s)\n" , prompt, name, lastname, self:get_gender())
+    utils.plog("%s%s %s (%s)\n" , prompt, name, lastname, self:get_gender())
     utils.plog("%s%s- class: %s (%s)\n", tab, prompt, self.class, self.group or "no group")
     utils.plog("%s%s- place: %s\n", prompt, tab, self.place or "none")
-    if self.extra_time then
-        utils.plog("%s%s- extra time: +%d/100\n", prompt, tab, self.extra_time)
-    else
-        utils.plog("%s%s- no extra time\n", prompt, tab)
+    if self.extra_time or self.dyslexia or self.dyscalculia or self.enlarged_font then
+        utils.plog("%s%s- adaptations: ", prompt, tab)
+        local adaptations = {}
+        if self.extra_time then table.insert(adaptations, "extra time") end
+        if self.dyslexia then table.insert(adaptations, "dyslexia") end
+        if self.dyscalculia then table.insert(adaptations, "dyscalculia") end
+        if self.enlarged_font then table.insert(adaptations, "enlarged font") end
+        utils.plog("%s.\n", table.concat(adaptations, ", "))
     end
 
     if self.results then

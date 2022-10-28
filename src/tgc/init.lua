@@ -204,11 +204,11 @@ function Tgc:get_student_name (sid, style)
     else return nil end
 end
 
-function Tgc:get_student_fullname (sid, style)
+function Tgc:get_student_fullname (sid, style, nickname)
     local s = self.students[sid]
     local style = style or "no"
 
-    if s then return s:get_fullname(style)
+    if s then return s:get_fullname(style, nickname)
     else return nil end
 end
 
@@ -252,13 +252,15 @@ end
 --------------------------------------------------------------------------------
 -- Gets the students adjustments.
 -- @param sid the student index
--- @return extra_time, or nil
--- FIXME: change to extra_time
-function Tgc:get_student_adjustments (sid)
+-- @return extra_time, dyslexia, dyscalculia, enlarged_font
+function Tgc:get_student_adaptations (sid)
     local s = self.students[sid]
 
-    if s then return s.extra_time
-    else return nil end
+    if s then
+        return s:get_adaptations ()
+    else
+        return nil
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -273,13 +275,24 @@ function Tgc:set_student_lastname (sid, lastname)
     local s = self.students[sid]
     if s then s:update({lastname = lastname}) end
 end
+function Tgc:set_student_nickname (sid, nickname)
+    local s = self.students[sid]
+    if s then s:update({nickname = nickname}) end
+end
 function Tgc:set_student_place (sid, place)
     local s = self.students[sid]
     if s then s:update({place = place}) end
 end
-function Tgc:set_student_extra_time (sid, extra_time)
+function Tgc:set_student_adaptations (sid, extra_time, dyslexia, dyscalculia, enlarged_font)
     local s = self.students[sid]
-    if s then s:update({extra_time = extra_time}) end
+    if s then
+        s:update({
+            extra_time    = extra_time,
+            dyslexia      = dyslexia,
+            dyscalculia   = dyscalculia,
+            enlarged_font = enlarged_font,
+        })
+    end
 end
 
 --------------------------------------------------------------------------------
