@@ -97,13 +97,12 @@ end
 -- @return comp (table)
 --------------------------------------------------------------------------------
 local function split_competencies (comp_list)
-    local comp = {}
-
-    if not comp_list then
+    if not comp_list or string.match(comp_list, "^%d*$") then
         return nil
     end
 
     -- convert the result string into a table
+    local comp = {}
     for id, grades in string.gmatch(comp_list, "(%d+)([ABCDabcd%*]+)") do
         for grade in string.gmatch(grades, "[ABCDabcd]%*?") do
             comp[id] = (comp[id] or "") .. grade:upper()
@@ -114,13 +113,13 @@ local function split_competencies (comp_list)
 end
 
 --------------------------------------------------------------------------------
--- Merge a competencies table to string
+-- Convert a competencies table to string
 -- Exemple : {[1] = "AB", [2] = "CD", [4] = "B"} returns "1AB 2CD 4B"
 --
 -- @param comp_list (string) - a list of competencies ids and corresponding grades
 -- @return comp (table)
 --------------------------------------------------------------------------------
-local function merge_competencies (comp)
+local function competencies_concat (comp)
     local comp = comp or {}
     local comp_tmp = {}
 
@@ -135,49 +134,42 @@ local function merge_competencies (comp)
 end
 
 --------------------------------------------------------------------------------
---- Associates each grade of a list to the corresponding competence of the
+--- Associates each grade of a list to the corresponding competency id of the
 --- other list.
 --
--- A stared competence is only took into account if the corresponding grade is
--- also stared. If the grade already contains competences, then the list of
--- competences is discarded.
---
 -- @param grades (string) - a list of grades (A, B, C, D)
--- @param comps (string) - a list of competences (number)
--- @return result (string) - the list of competences.
+-- @param ids (string) - a list of competencies ids (number)
+-- @return result (string) - the list of competencies.
 --------------------------------------------------------------------------------
---[[local function combine_comps_and_grades (grades, comps)
+local function merge_ids_and_grades (grades, ids)
     local result = ""
-    local ct, gt = {}, {} -- competences and grades table
+    local ids_list, grades_list = {}, {}
 
-    -- First check if the grades contains competences. In this case, no need to
-    -- combine.
-    if grades:match("%d+") then return grades end
-
-    for comp in string.gmatch(comps, "%d+%*?") do
-        ct[#ct + 1] = comp
-    end
-    for grade in string.gmatch(grades, "[ABCDabcd]%*?") do
-        gt[#gt + 1] = grade
+    -- First check if the grades already contains competences ids. In this
+    -- case, no need to merge.
+    if string.match(grades, "%d+") or not ids then
+        return grades
     end
 
-    local m = 1
-    for n = 1, #ct do
-        if not gt[m] then break end
-        local comp = string.match(ct[n], "%d+")
-        -- ignore stared competences when no stared grade is given
-        if string.match(ct[n], "%*")  and string.match(gt[m], "%*") then
-            result = result .. comp .. gt[m]
-            m = m + 1
-        elseif not string.match(ct[n], "%*") then
-            result = result .. comp .. gt[m]
-            m = m + 1
+    -- Get the lists of grades and ids
+    for id in string.gmatch(ids, "%d+") do
+        table.insert(ids_list, id)
+    end
+    for grade in string.gmatch(grades, "[ABCDabcd]") do
+        table.insert(grades_list, grade)
+    end
+
+    -- Merge
+    for i, id in ipairs(ids_list) do
+        if not grades_list[i] then
+            break
+        else
+            result = result .. id .. grades_list[i]
         end
     end
 
-    return result
+    return result ~= "" and result or nil
 end
-]]--
 
 --------------------------------------------------------------------------------
 --- THE GRADE CLASS
@@ -230,27 +222,32 @@ local Grade_mt = {
 -- The grade contains two parts :
 --  + an numbered grade (ex: 12.4)
 --  + a list of competencies number with the corresponding letter grade (ex:
---  "1A 2B 3C")
+--  "1A 2B 3C").
 --
 -- A grade can contain the numbered part alone, the competencies part alone or
 -- it can be a table containing both.
 --
+-- If the list of competencies only contains the grades (ex: A BC D DA…), it
+-- can be combined with the associated competencies ids from the evaluation
+-- information given in third parameters (this parameters is then a list of
+-- corresponding competencies ids [1 2 2 3 4 4] in the same order).
+--
 -- @param grade1 or grade2 (number) - a numbered grade.
 -- @param grade1 or grade2 (string) - a list of competencies with corresponding
--- grades (see above).
 -- @param grade1 (table) - a table with both grade1 and grade2
+-- @param eval_comp - a list of competencies ids corresponding to the competencies grade.
 -- @return g (Grade)
 --------------------------------------------------------------------------------
-function Grade.new (grade1, grade2)
+function Grade.new (grade1, grade2, eval_comp)
     local g = setmetatable({}, Grade_mt)
 
     if type(grade1) == "number" then
         g.num  = grade1
         if type(grade2) == "string" then
-            g.comp = split_competencies(grade2)
+            g.comp = split_competencies(merge_ids_and_grades(grade2, eval_comp))
         end
     elseif type(grade1) == "string" then
-        g.comp = split_competencies(grade1)
+        g.comp = split_competencies(merge_ids_and_grades(grade1, eval_comp))
         if type(grade2) == "number" then
             g.num = grade2
         end
@@ -273,22 +270,18 @@ function Grade:write (f)
     if self.num and not self.comp then
         fwrite("%.2f",     self.num)
     elseif self.comp and not self.num then
-        fwrite("%q",       merge_competencies(self.comp))
+        fwrite("%q",       competencies_concat(self.comp))
     elseif self.num and self.comp then
-        fwrite("{%.2f, %q}", self.num, merge_competencies(self.comp))
+        fwrite("{%.2f, %q}", self.num, competencies_concat(self.comp))
     end
 end
 
 --------------------------------------------------------------------------------
---- Gets the grades of the specified competence.
---
--- @param comp (number) - the competence number!
--- @return (string)
---------------------------------------------------------------------------------
---[[function Grade:get_grades (comp)
-    return self[comp]
+--- Get the score and competencies parts of a grade.
+function Grade:get_score_and_comp ()
+    return self.num, competencies_concat(self.comp)
 end
-]]--
+
 
 --------------------------------------------------------------------------------
 --- Means the grades of each competences.

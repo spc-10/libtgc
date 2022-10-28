@@ -44,21 +44,21 @@ end
 -- @param val (number or string or table) @see Grade class
 -- @param val (table of number or string or table) will be a table of Grades
 -- @return Grade or a table of Grades
-local function create_grades (val)
+local function create_grades (val, eval_comp)
     local grades = {}
 
     if type(val) == "number" or type(val) == "string" then
-        table.insert(grades, Grade.new(val))
+        table.insert(grades, Grade.new(val, nil, eval_comp))
     elseif type(val) == "table" then
         -- We must check if the table is a grade or a table of grade
         if #val == 1 then -- we only have one grade
-            table.insert(grades, Grade.new(val[1]))
+            table.insert(grades, Grade.new(val[1], nil, eval_comp))
         elseif #val == 2 and type(val[1]) == "number" and type(val[2]) == "string" then
             -- again only one grade
-            table.insert(grades, Grade.new(val[1], val[2]))
+            table.insert(grades, Grade.new(val[1], val[2], eval_comp))
         else
             for _, grade in ipairs(val) do
-                table.insert(grades, Grade.new(grade))
+                table.insert(grades, Grade.new(grade, nil, eval_comp))
             end
         end
     else
@@ -126,13 +126,13 @@ function Result.new (o)
     r.eval                    = o.eval
     -- Grades can be a single object or a table of grades
     -- TODO: handle errors?
-    r.grades                  = create_grades(o.grades)
+    r.grades                  = create_grades(o.grades, o.eval.competencies)
 
     -- Subresults (only one depth)
     r.subresults = {}
     if o.subresults and type(o.subresults) == "table" then
         for _, subresult in pairs(o.subresults) do
-            print("DEBUG : adding subresult = ", subresult)
+            --print("DEBUG : adding subresult = ", subresult)
             local eid, subeid = Eval.split_fancy_eval_index(subresult.eval_id)
             subresult.eval = o.eval.subevals[subeid]
             r.subresults[subeid] = Result.new(subresult)
@@ -148,13 +148,16 @@ end
 -- @param o (table) - same as in new()
 -- @return
 function Result:add_result (o)
-    local o = o or {}
+    o = o or {}
     self.grades = self.grades or {}
 
-    if not self.eval:is_multi_attempts_allowed() then
+    local competencies         = self.eval:get_competencies_infos()
+    local allow_multi_attempts = self.eval:get_multi_infos()
+
+    if not allow_multi_attempts then
         return nil --TODO err msg
     else
-        local new_grades = create_grades(o.grades)
+        local new_grades = create_grades(o.grades, competencies)
         for _, g in ipairs(new_grades) do
             table.insert(self.grades, g)
         end
@@ -167,23 +170,23 @@ end
 -- See Result.new()
 -- @return (bool) true if an update has been done, false otherwise.
 -- FIXME: not working.
-function Result:update (o)
-    local update_done = false
-
-    -- Update valid attributes
-    if o.competencies
-        and type(competencies) == "string"
-        and string.match(competencies, "^%s*$") then
-        self.competencies = tostring(o.competencies)
-        update_done = true
-    end
-    if tonumber(o.score) then
-        self.score = tonumber(o.score)
-        update_done = true
-    end
-
-    return update_done
-end
+--function Result:update (o)
+--    local update_done = false
+--
+--    -- Update valid attributes
+--    if o.competencies
+--        and type(competencies) == "string"
+--        and string.match(competencies, "^%s*$") then
+--        self.competencies = tostring(o.competencies)
+--        update_done = true
+--    end
+--    if tonumber(o.score) then
+--        self.score = tonumber(o.score)
+--        update_done = true
+--    end
+--
+--    return update_done
+--end
 
 --------------------------------------------------------------------------------
 -- Write the evaluation result in a file.
@@ -214,22 +217,34 @@ function Result:write (f)
 
     -- Subresults (results for sub evaluations)
     if next(self.subresults) then
-        fwrite(" subresults = {")
+        fwrite(" subresults = {\n")
         for _, subresult in ipairs(self.subresults) do
-            fwrite("\n")
             subresult:write(f)
         end
-        fwrite("},\n")
+        fwrite("},\n         ")
     end
 
     -- Close
-    if subeid then
-        fwrite(" },")
-    else
-        fwrite("        },\n")
-    end
+    fwrite("},\n")
 
     f:flush()
+end
+
+--------------------------------------------------------------------------------
+-- Return the results grades as a score, competencies table.
+function Result:get_results ()
+    local grades = {}
+    local g = self.grades
+
+    if not next(g) then
+        return nil
+    else
+        for _, grade in ipairs(g) do
+            table.insert(grades, {grade:get_score_and_comp()})
+        end
+    end
+
+    return grades
 end
 
 --------------------------------------------------------------------------------
@@ -241,7 +256,7 @@ function Result:get_score_infos ()
     local max_score, real_max_score, over_max = self.eval:get_score_infos()
     return self.score, max_score, real_max_score, over_max
 end
-function Result:get_competency_infos ()
+function Result:get_competencies_infos ()
     return self.competencies
 end
 

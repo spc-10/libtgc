@@ -86,7 +86,8 @@ function Student.new (o)
             local eid = result.eval_id
             local e = o.evaluations[eid]
             if not e then
-                return nil -- TODO error msg
+                break
+                -- return nil -- TODO error msg/assert
             end
             result.eval = e
             s.results[eid] = Result.new(result)
@@ -336,7 +337,13 @@ function Student:add_result (o)
 
     -- Get the result correspond to the eval ids.
     local eid, subeid = e:get_ids()
-    local r = self:get_result(eid, subeid)
+    local r
+    if subeid then
+        r = self.results[eid] and self.results[eid].subresults[subeid]
+    else
+        r = self.results[eid]
+    end
+
 
     -- If a result already exists, we add the new one to the existing one if
     -- the eval allows multiple attempts.
@@ -361,11 +368,21 @@ end
 -- Get the results corresponding to an evaluation id and subid.
 -- @param eid the evaluation id
 -- @param subeid the subevaluation id
-function Student:get_result (eid, subeid)
+-- @return a list of grades (score and competencies)
+-- TODO: Check allow_multi_attempts to return a list of grades or a unique grade?
+function Student:get_results (eid, subeid)
+    local r
+
     if subeid then
-        return self.results[eid] and self.results[eid].subresults[subeid]
+        r = self.results[eid] and self.results[eid].subresults[subeid]
     else
-        return self.results[eid]
+        r = self.results[eid]
+    end
+
+    if not r then
+        return nil
+    else
+        return r:get_results()
     end
 end
 

@@ -133,12 +133,12 @@ function Tgc:add_student (o)
     table.binsert(self.students, s) -- Binary insertion.
 
     -- Add class to the database list.
-    if not self:is_class_exist(o.class) then
+    if not self:class_exists(o.class) then
         table.insert(self.classes, o.class)
     end
 
     -- Same for groups
-    if not self:is_group_exist(o.group) then
+    if not self:group_exists(o.group) then
         table.insert(self.groups, o.group)
     end
 end
@@ -339,38 +339,33 @@ end
 -- @param eid the eval index
 -- @param[opt=nil] subeid the index of a subevaluation
 -- @param o the result's attributes (see Result class)
-function Tgc:add_student_result (sid, eid, subeid, o)
-    local o = o or nil
-    -- If the function only have 3 args (subeid optional)
-    if o == nil and (type(subeid) == "table" or subeid == nil) then
-        o, subeid = subeid or {}, nil
-    end
+function Tgc:add_student_result (sid, eid, o)
+    o = o or nil
     local s = self.students[sid]
+    local e = self.evaluations[eid]
 
     -- Check if student exists
-    if not s then
-        return nil -- TODO error msg
-    end
-
-    -- Check if eval exists
-    local e
-    if self.evaluations[eid] and subeid then
-        e = self.evaluations[eid].subevals[subeid] or nil
-    else
-        e = self.evaluations[eid]
-    end
-
-    if not e then
+    if not s or not e then
         return nil -- TODO error msg
     end
 
     -- Add date and quarter infos for this class and evaluation.
     local class = s:get_class()
-    e:add_result(class, o.date, o.quarter)
+    e:add_result_date(class, o.date)
 
     -- Eventually, adds the result
     o.eval = e
     return s:add_result(o)
+end
+
+--------------------------------------------------------------------------------
+-- Get the list of dates of an evaluation for a particular class.
+-- @param eid the index of the eval
+-- @param class
+function Tgc:get_eval_result_dates (eid, class)
+    local e = self.evaluations[eid]
+
+    return e and e.dates and e.dates[class]
 end
 
 --------------------------------------------------------------------------------
@@ -394,6 +389,60 @@ function Tgc:get_student_result_infos (sid, title_p, category)
     local title, max_score, over_max = nil, nil, nil
 
     --TODO: local _, _, quarter, date =
+end
+
+--------------------------------------------------------------------------------
+-- Returns a list of the student results.
+function Tgc:get_student_results (sid, eid)
+    local s = self.students[sid]
+    local e = self.evaluations[eid]
+
+    if not s or not e then return nil end
+
+    return s:get_results(eid)
+end
+
+--------------------------------------------------------------------------------
+-- Returns a list of the student results infos if multiple attempts are allowed.
+function Tgc:get_student_results_success_infos (sid, eid)
+    local s = self.students[sid]
+    local e = self.evaluations[eid]
+
+    if not s or not e or not e:is_multi_attempts_allowed() then
+        return nil
+    end
+
+    -- TODO handle groups
+    local class = s:get_class()
+    local max_attempts = e:get_attempts_nb(class)
+
+    local student_attempts, success, one_shot, perfect, last_fails = 0, 0, 0, 0, 0
+    local max_score           = e:get_score_infos()
+    local _, success_score_pc = e:get_multi_infos()
+
+    local last_is_success = true
+    local r = s:get_results(eid)
+    if r then
+        for _, grade in ipairs(r) do
+            student_attempts = student_attempts + 1
+            if grade[1] >= success_score_pc * max_score / 100 then
+                success = success + 1
+                if last_is_success then
+                    if grade[1] == max_score then
+                        perfect = perfect + 1
+                    end
+                    one_shot = one_shot + 1
+                end
+                last_is_success = true
+                last_fails = 0
+            else
+                last_is_success = false
+                last_fails = last_fails + 1
+            end
+        end
+    end
+
+    return max_attempts, student_attempts, success, one_shot, perfect, last_fails
 end
 
 --------------------------------------------------------------------------------
@@ -461,7 +510,7 @@ end
 -- Checks if an evaluation exists.
 -- @param eid the evaluation index
 -- @return the evaluation index
-function Tgc:is_eval_exist(eid, subeid)
+function Tgc:eval_exists(eid, subeid)
     -- TODO
 end
 
@@ -588,15 +637,16 @@ function Tgc:get_eval_infos (eid)
 end
 
 --------------------------------------------------------------------------------
--- Gets an evaluation's full title (title + subtitle)
+-- Gets evaluations title informations.
 function Tgc:get_eval_fulltitle (eid, sep)
     local e = self.evaluations[eid]
 
-    if e then
-        return e:get_fulltitle(sep)
-    else
-        return nil
-    end
+    if e then return e:get_fulltitle(sep) end
+end
+function Tgc:get_eval_title (eid)
+    local e = self.evaluations[eid]
+
+    if e then return e:get_title(sep) end
 end
 
 --------------------------------------------------------------------------------
@@ -604,20 +654,23 @@ end
 function Tgc:get_eval_score_infos (eid)
     local e = self.evaluations[eid]
 
-    if e then
-        return e:get_score_infos()
-    else
-        return nil
-    end
+    if e then return e:get_score_infos() end
+end
+
+--------------------------------------------------------------------------------
+-- Gets an evaluation's multiple attempts informations.
+function Tgc:get_eval_multi_infos (eid)
+    local e = self.evaluations[eid]
+
+    if e then return e:get_multi_infos() end
 end
 
 --------------------------------------------------------------------------------
 -- Gets an evaluation's competency informations.
-function Tgc:get_eval_competency_infos (eid)
+function Tgc:get_eval_competencies_infos (eid)
     local e = self.evaluations[eid]
 
-    if e then return e:get_competency_infos()
-    else return nil end
+    if e then return e:get_competencies_infos() end
 end
 
 --------------------------------------------------------------------------------
@@ -746,7 +799,7 @@ end
 -- Checks if the class exists.
 -- @param class
 -- @return `true` if the class exists, `false` otherwise
-function Tgc:is_class_exist(class)
+function Tgc:class_exists(class)
     if type(class) ~= "string" then
         return false
     else
@@ -762,7 +815,7 @@ end
 -- Checks if the group exists.
 -- @param class
 -- @return `true` if the group exists, `false` otherwise
-function Tgc:is_group_exist(group)
+function Tgc:group_exists(group)
     if type(group) ~= "string" then
         return false
     else

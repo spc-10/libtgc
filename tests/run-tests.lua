@@ -332,7 +332,7 @@ for sid in tgc:next_student() do
                         plog("-")
                     end
                     plog("/%.0f [%s], ", max_score, competencies or "")
-                    tgc:add_student_result(sid, eid, subeid, {
+                    tgc:add_student_result(sid, eid, {
                         date    = date,
                         quarter = quarter,
                         grades  = grade})

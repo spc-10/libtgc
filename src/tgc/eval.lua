@@ -110,7 +110,7 @@ function Eval.new (o)
 
     -- Assign attributes
     e.parent                  = o.parent
-    e.id                      = tonumber(string.match(o.id, "%d*%.*(%d+)")) -- subeval id is store as X.Y
+    e.id                      = tonumber(string.match(o.id, "%d-%.*(%d+)")) -- subeval id is store as X.Y
     e.title                   = o.title and tostring(o.title)
     e.subtitle                = o.subtitle and tostring(o.subtitle)
     e.category                = eval_type_exists(o.category) and o.category
@@ -123,12 +123,13 @@ function Eval.new (o)
     e.max_score               = tonumber(o.max_score)
     e.real_max_score          = tonumber(o.real_max_score)
     e.over_max                = o.over_max and true or false
-    e.success_score_pc        = tonumber(o.success_score_pc)
 
     e.allow_multi_attempts    = o.allow_multi_attempts and true or false
+    e.success_score_pc        = tonumber(o.success_score_pc)
 
     -- Subevals stuff
-    e.subevals = {}
+    -- TODO: to remove?
+    e.subevals                = {}
     if o.subevals and type(o.subevals == "table")  then
         for _, subeval in pairs(o.subevals) do
             local eid, subeid = split_fancy_eval_index(subeval.id)
@@ -138,10 +139,12 @@ function Eval.new (o)
     end
 
     -- Results stuff (dates and quarter for each class)
-    e.results = {}
-    if o.results and type(o.results == "table") then
-        for class, result in pairs(o.results) do
-            e.results[class] = create_valid_result(result)
+    e.quarter                 = tonumber(o.quarter)
+    e.dates                   = {}
+    if o.dates and type(o.dates == "table") then
+        for class, dates in pairs(o.dates) do
+            -- FIXME: check 'dates' is a table?
+            e.dates[class] = dates
         end
     end
 
@@ -159,20 +162,26 @@ function Eval:add_subeval (o)
 end
 
 --------------------------------------------------------------------------------
--- Add the date and quarter corresponding to when a class did the evaluation.
+-- Add the date corresponding to when a class did the evaluation.
 -- @param class (string)
 -- @param date (string) a valid date
--- @param quarter (string) a valid quarter
 -- @return nothing ?
-function Eval:add_result (class, date, quarter)
-    self.results = self.results or {}
+function Eval:add_result_date (class, date)
+    self.dates        = self.dates or {}
+    self.dates[class] = self.dates[class] or {}
 
-    if self.results[class] then
-        -- TODO: Checks for inconsistency between current date/quarter and new
-        -- one?
-        return
-    else
-        self.results[class] = create_valid_result{date = date, quarter = quarter}
+    local date_found  = false
+    -- Checks if the date already exists
+    for _, d in ipairs(self.dates[class]) do
+        if d == date then
+            date_found = true
+            break
+        end
+    end
+
+    -- TODO: error handling (if date found)?
+    if not date_found then
+        table.insert(self.dates[class], date)
     end
 end
 
@@ -277,7 +286,7 @@ function Eval:write (f)
     -- end
     -- FIXME: adapt to competencies format.
     local space = ""
-    if self.max_score or self.over_max or self.success_score_pc or self.competencies then
+    if self.max_score or self.over_max or self.competencies then
         fwrite("\n%s",                          tab)
         if self.max_score then
             fwrite("max_score = %d,",           self.max_score)
@@ -291,38 +300,40 @@ function Eval:write (f)
             fwrite("%sover_max = %q,",          space, self.over_max)
             space = " "
         end
-        if self.success_score_pc then
-            fwrite("%ssuccess_score_pc = %d,",  space, self.success_score_pc)
-            space = " "
-        end
         if self.competencies then
             fwrite("%scompetencies = %q,",      space, self.competencies)
         end
     end
 
-    if self.allow_multi_attempts then
-        fwrite("\n%sallow_multi_attempts = %q,", tab, self.allow_multi_attempts)
+    -- Multiple attempts
+    space = ""
+    if self.success_score_pc or self.allow_multi_attempts then
+        fwrite("\n%s",                           tab)
+        if self.allow_multi_attempts then
+            fwrite("allow_multi_attempts = %q,", self.allow_multi_attempts)
+            space = " "
+        end
+        if self.success_score_pc then
+            fwrite("%ssuccess_score_pc = %d,",   space, self.success_score_pc)
+        end
     end
 
-    -- Results
-    if next(self.results) then
-        fwrite("\n%sresults = {",            tab)
-        for class, result in pairs(self.results) do
-            if result and result.date or result.quarter then -- only prints if result contains infos
-                fwrite("\n%s    [%q] = {",            tab, class)
-                if result.date then
-                    fwrite("date = %q",        result.date)
-                end
-                if result.date or result.quarter then
-                    fwrite(", ")
-                end
-                if result.quarter then
-                    fwrite("quarter = %q",     result.quarter)
+    -- Results dates
+    if self.quarter then
+        fwrite("\n%squarter = %q,",              tab, self.quarter)
+    end
+    if next(self.dates) then
+        fwrite("\n%sdates = {",                  tab)
+        for class, dates in pairs(self.dates) do
+            if dates and type(dates) == "table" then
+                fwrite("\n%s     [%q] = {",      tab, class)
+                for _, d in pairs(dates) do
+                    fwrite("%q, ",               d)
                 end
                 fwrite("},")
             end
         end
-        fwrite("},")
+        fwrite("\n%s},",                         tab)
     end
 
     -- Only print non empty subevals
@@ -417,20 +428,35 @@ function Eval:get_fulltitle (sep)
     end
 end
 
+-- Returns the number of attempts for a particular class.
+function Eval:get_attempts_nb (class)
+    return self.dates and self.dates[class] and #self.dates[class] or 0
+end
+
 -- Returns the evaluation's score informations.
 -- Subevals inherits from its parent eval
 function Eval:get_score_infos ()
     if not self.parent then
         return self.max_score or DEFAULT_MAX_SCORE,
             self.real_max_score,
-            self.over_max,
-            self.allow_multi_attempts
+            self.over_max
     else
-        local pmax, prealmax, pover, multi = self.parent:get_score_infos()
+        local pmax, prealmax, pover = self.parent:get_score_infos()
         return self.max_score or pmax,
             self.real_max_score or prealmax,
-            self.over_max or pover,
-            self.allow_multi_attempts or multi
+            self.over_max or pover
+    end
+end
+-- Returns the evaluation's informations about multiple attempts.
+-- Subevals inherits from its parent eval
+function Eval:get_multi_infos ()
+    if not self.parent then
+        return self.allow_multi_attempts,
+            self.success_score_pc
+    else
+        local pallow, psuccess = self.parent:get_multi_infos()
+        return self.allow_multi_attempts or pallow,
+            self.success_score_pc or psucces
     end
 end
 -- Checks if the eval allows multiple attempts.
@@ -441,10 +467,15 @@ function Eval:is_multi_attempts_allowed ()
         return self.parent:is_multi_attempts_allowed()
     end
 end
--- Returns the evaluation's competency informations.
--- function Eval:get_competency_infos ()
---     return self.competency_mask, self.competency_score_mask
--- end
+-- Returns the evaluation's competencies informations.
+function Eval:get_competencies_infos ()
+    if not self.parent then
+        return self.competencies
+    else
+        local pcomp = self.parent:get_competencies_infos()
+        return self.competencies or pcomp
+    end
+end
 
 
 
