@@ -254,6 +254,7 @@ end
 
 --------------------------------------------------------------------------------
 -- Get the formated name of a student.
+-- TODO: nickname doc
 -- The names are in lowercase except the first letter.
 -- The names can also be shorten (first part not changed and other parts
 -- replaced by initials) using following styles:

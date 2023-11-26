@@ -193,14 +193,15 @@ end
 
 --------------------------------------------------------------------------------
 -- Gets the students name.
+-- TODO: nickname doc
 -- @param sid the student index
 -- @param style[opt] the format style
 -- @return name, lastname or nil
-function Tgc:get_student_name (sid, style)
+function Tgc:get_student_name (sid, style, nickname)
     local s = self.students[sid]
     local style = style or "no"
 
-    if s then return s:get_name(style)
+    if s then return s:get_name(style, nickname)
     else return nil end
 end
 
