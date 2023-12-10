@@ -11,6 +11,9 @@
 
 local Student       = require "tgc.student"
 local Eval          = require "tgc.eval"
+local Result        = require "tgc.result"
+local Grade         = require "tgc.grade"
+local Comp_list     = require "tgc.comp"
 --local Category_rule = require "tgc.catrule"
 local utils         = require "tgc.utils"
 local DEBUG         = utils.DEBUG
@@ -43,6 +46,7 @@ function Tgc.init ()
     t.classes           = {}
     t.groups            = {}
     t.evaluations       = {}
+    t.comp_lists        = {}
 
     return t
 end
@@ -64,6 +68,7 @@ function Tgc:load (filename)
     -- function entry (s) self:add_student(s) end -- for compatibility
     function student_entry (s) self:add_student(s) end
     function evaluation_entry (s) self:add_eval(s) end
+    function comp_list_entry (s) self:add_comp_list(s) end
 
     -- Processes database file.
     dofile(filename)
@@ -78,6 +83,10 @@ function Tgc:write (filename)
     if not f then return nil, msg end
 
     f:write(string.format("-- %s\n", self._VERSION))
+    f:write("\n-- Competencies lists\n")
+    for _, l in ipairs(self.comp_lists) do
+        l:write(f)
+    end
     f:write("\n-- Evaluations\n")
     for _, e in ipairs(self.evaluations) do
         e:write(f)
@@ -126,12 +135,15 @@ end
 function Tgc:add_student (o)
     o = o or {}
 
-    -- Have to pass the evaluation table to create results
+    -- Have to pass the evaluation and competencies tables to create results
+    -- and reports.
     o.evaluations = self.evaluations
+    o.comp_list   = self.comp_list
 
     local s = Student.new(o)
     table.binsert(self.students, s) -- Binary insertion.
 
+    -- FIXME do not add empty "" class eand group
     -- Add class to the database list.
     if not self:class_exists(o.class) then
         table.insert(self.classes, o.class)
@@ -393,14 +405,225 @@ function Tgc:get_student_result_infos (sid, title_p, category)
 end
 
 --------------------------------------------------------------------------------
--- Returns a list of the student results.
-function Tgc:get_student_results (sid, eid)
+-- Converts the competencies of a student for the base competencies.
+-- FIXME A lot of code pasted here
+-- TODO
+function Tgc:get_student_competencies_base (sid, quarter, comp_list_id)
+    local s = self.students[sid]
+    local competencies_sum = ""
+
+    -- first get all the competencies grades
+    for _, r in pairs(s.results) do
+        -- if no quarter specified, get all the results
+        if not quarter or r:get_quarter() == tonumber(quarter) then
+            local eid = r:get_eval_ids()
+
+            -- FIXME: what to do if the evals have different competencies lists?
+            local _, _, eval_comp_list_id = r:get_competencies_infos()
+            assert(eval_comp_list_id == comp_list_id)
+
+            local grade = s:get_grade(eid)
+            if grade then
+                competencies_sum = competencies_sum .. " " .. grade:get_formatted_competencies("split")
+                --print("DEBUG comp_list_id = ", comp_list_id)
+
+            end
+        end
+    end
+
+
+    if string.match(competencies_sum, "^%s*$") then return nil end
+
+    -- Then, we get the domain index for each competency grade
+    -- FIXME: this suppose a score by domain. Maybe one prefer a score by
+    -- competency.
+    local comp_list = self.comp_lists[comp_list_id]
+    local conv_to_base = comp_list:comp_to_base()
+    local base_sum, n = string.gsub(competencies_sum, "(%d+)", conv_to_base)
+
+    local g = Grade.new(base_sum)
+    g = g:mean_competencies()
+
+    local hack_convert_table = {["1"] = "1.1",
+                                ["3"] = "1.3",
+                                ["5"] = "2",
+                                ["6"] = "3",
+                                ["7"] = "4",
+                                ["8"] = "5"}
+
+    local tmp = g:get_formatted_competencies()
+    local base_grade = string.gsub(tmp, "(%d+)", hack_convert_table)
+
+    return base_grade
+
+end
+
+--------------------------------------------------------------------------------
+-- Converts the competencies of a student to a score.
+-- TODO
+function Tgc:get_student_competencies_score (sid, quarter, comp_list_id)
+    local s = self.students[sid]
+    local competencies_sum = ""
+
+    -- first get all the competencies grades
+    for _, r in pairs(s.results) do
+        -- if no quarter specified, get all the results
+        if not quarter or r:get_quarter() == tonumber(quarter) then
+            local eid = r:get_eval_ids()
+
+            -- FIXME: what to do if the evals have different competencies lists?
+            local _, _, eval_comp_list_id = r:get_competencies_infos()
+            assert(eval_comp_list_id == comp_list_id)
+
+            local grade = s:get_grade(eid)
+            if grade then
+                competencies_sum = competencies_sum .. " " .. grade:get_formatted_competencies("split")
+                --print("DEBUG comp_list_id = ", comp_list_id)
+
+            end
+        end
+    end
+
+    if string.match(competencies_sum, "^%s*$") then return nil end
+
+    -- Then, we get the domain index for each competency grade
+    -- FIXME: this suppose a score by domain. Maybe one prefer a score by
+    -- competency.
+    local comp_list = self.comp_lists[comp_list_id]
+    local conv_to_domain = comp_list:comp_to_domain()
+    local domain_sum, n = string.gsub(competencies_sum, "(%d+)", conv_to_domain)
+
+    -- Now we calculate the score
+    -- FIXME this is some code from grade.lua - factorise it!
+    local comp_grade_score = {}
+    local comp_grade_score_sum = {}
+    local comp_grade_nval = {}
+    local total_score = 0
+    local max_score = 0
+
+    local score = {}
+    for id, letter in string.gmatch(domain_sum, "(%d+)([ABCDabcd-])") do
+        local score, nval
+
+        local i = tonumber(id)
+        comp_grade_score_sum[i] = comp_grade_score_sum[i] or 0
+        comp_grade_nval[i]      = comp_grade_nval[i] or 0
+
+        -- TODO get letter_grades score from configuration file
+        if letter == "A" then
+            score, nval = 1, 1
+        elseif letter == "B" then
+            score, nval = 0.66, 1
+        elseif letter == "C" then
+            score, nval = 0.33, 1
+        elseif letter == "D" then
+            score, nval = 0, 1
+        else -- letter == "-"
+            score, nval = 0, 0
+            --print("DEBUG : score, nval = 0, 0")
+        end
+        --print("DEBUG : comp_grade_score_sum[i] = ", comp_grade_score_sum[i], i)
+        comp_grade_score_sum[i] = comp_grade_score_sum[i] + score
+        --print("DEBUG : comp_grade_score_sum[i] + score = ", comp_grade_score_sum[i], i)
+        comp_grade_nval[i] = comp_grade_nval[i] + nval
+    end
+
+    for id = 1, comp_list:get_domain_nb() do
+        local _, _, points = comp_list:get_domain_infos(id)
+
+        local score_sum  = comp_grade_score_sum[id] or 0
+        local grade_nval = comp_grade_nval[id] or 0
+
+        -- we only count evaluated domains
+        -- FIXME or (id == 7) is a hack to consider this domain as a bonus.
+        -- Must be handle correctly in the future!
+        if (grade_nval > 0) or (id == 7) then
+
+            if grade_nval == 0 then
+                max_score = max_score + points
+            else
+                comp_grade_score[id] = points * score_sum / grade_nval
+                total_score = total_score + comp_grade_score[id]
+                max_score   = max_score + points
+            end
+        end
+    end
+
+    -- return the score (20 scaled, 100 scaled and the detail table
+    return total_score / max_score * 20, total_score, max_score, comp_grade_score
+end
+
+--------------------------------------------------------------------------------
+-- Returns the mean results of a student list for a specific evaluation.
+-- TODO
+function Tgc:get_eval_grade (eid, sids)
+    local e = self.evaluations[eid]
+    local tmp_eval_grades, eval_grades, mean_grades = {}, {}, {}
+    local final_comp_grades = ""
+    local score_sum, score_nval, score_mean = 0, 0
+
+    if not e then return nil end
+    local eval_comp, eval_comp_nb = e:get_competencies_infos()
+
+    if not sids or not next(sids) then return nil end
+    for _, sid in ipairs(sids) do
+        local s = self.students[sid]
+        local grade = s:get_grade(eid)
+        if grade then
+            local score, competencies = grade:get_score_and_competencies()
+
+            if score then
+                score_sum = score_sum + score
+                score_nval = score_nval + 1
+            end
+            if competencies then
+                for i = 1, eval_comp_nb do
+                    tmp_eval_grades[i] = tmp_eval_grades[i] or {}
+                    table.insert(tmp_eval_grades[i], competencies[i])
+                end
+            end
+        end
+    end
+
+    -- Calculate the mean competencies
+    for i = 1, eval_comp_nb do
+        eval_grades[i] = Grade.new(table.concat(tmp_eval_grades[i] or {}, " ")) -- FIXME crash if not comp
+        mean_grades[i] = eval_grades[i]:mean_competencies()
+        final_comp_grades = final_comp_grades .. " " .. mean_grades[i]:get_formatted_competencies("compact")
+    end
+
+    -- Calculate the mean score
+    if score_nval > 0 then
+        score_mean = score_sum / score_nval
+    else
+        score_mean = nil
+    end
+
+    return score_mean, Grade.new(nil, final_comp_grades, competencies):get_formatted_competencies("split")
+end
+
+--------------------------------------------------------------------------------
+-- TODO rename that
+-- Returns a list of the student results grades.
+function Tgc:get_student_results (sid, eid, style)
     local s = self.students[sid]
     local e = self.evaluations[eid]
 
     if not s or not e then return nil end
 
-    return s:get_results(eid)
+    return s:get_results(eid, nil, style)
+end
+
+--------------------------------------------------------------------------------
+-- TODO rename that
+-- Returns the student results grades.
+function Tgc:get_student_result (sid, eid, style)
+    local s = self.students[sid]
+    local e = self.evaluations[eid]
+
+    if not s or not e then return nil end
+
+    return s:get_result(eid, style)
 end
 
 --------------------------------------------------------------------------------
@@ -426,7 +649,7 @@ function Tgc:get_student_results_success_infos (sid, eid)
     if r then
         for _, grade in ipairs(r) do
             student_attempts = student_attempts + 1
-            if grade[1] >= success_score_pc * max_score / 100 then
+            if grade[1] and (grade[1] >= success_score_pc * max_score / 100) then
                 success = success + 1
                 if last_is_success then
                     if grade[1] == max_score then
@@ -455,31 +678,37 @@ end
 
 
 --------------------------------------------------------------------------------
--- Category rule stuff.
--- @section category
--- FIXME: to remove
+-- Competencies list stuff.
+-- @section competencies list
 --------------------------------------------------------------------------------
 
+--------------------------------------------------------------------------------
+-- Get a unused id for a new competencies list.
+-- @return an unused index
+function Tgc:get_unused_comp_list_id ()
+    local i = 1
+    while true do
+        if not self.evaluations[i] then
+            return i
+        end
+        i = i + 1
+    end
+end
+
 ----------------------------------------------------------------------------------
----- Adds a new category rule to the database.
----- @param o the category rule attributes (see Category_rule class)
---function Tgc:add_category_rule (o)
---    o = o or {}
---
---    local c = Category_rule.new(o)
---    table.insert(self.categories_rules, c)
---end
---
----- Gets the category rule informations
----- @param catname the name of the category
---function Tgc:get_category_rule_infos (catname)
---    for _, category in ipairs(self.categories_rules) do
---        local name, coefficient, mandatory, category_mean = category:get_infos()
---        if catname == name then
---            return coefficient, mandatory, category_mean
---        end
---    end
---end
+---- Adds a new competencies list to the database.
+---- @param o the competencies list attributes (see Comp_list class)
+function Tgc:add_comp_list (o)
+    local o = o or {}
+
+    -- Make sure the comp_list has an id
+    o.id = o.id or self:get_unused_comp_list_id()
+
+    local l = Comp_list.new(o)
+    self.comp_lists[l.id] = l
+
+    return l.id
+end
 
 
 

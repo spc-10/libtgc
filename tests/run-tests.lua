@@ -21,7 +21,7 @@ plog("%s loaded\n", tgc._VERSION)
 -- Default variables
 local LASTNAMES_FILE = "noms.txt"
 local NAMES_FILE     = "prenoms.txt"
-local N = 10 -- number of students
+local N = 500 -- number of students
 local C = 10 -- number of classes
 local M = 10 -- number of evaluations
 
@@ -159,7 +159,7 @@ end
 local function random_competencies ()
     local competencies = ""
     repeat
-        for id = 1, 8 do
+        for id = 1, 15 do
             -- A third chance to add this competency
             if math.random(3) == 1 then
                 competencies = competencies .. id .. string.char(math.random(4) + 64)
@@ -199,6 +199,40 @@ end
 --------------------------------------------------------------------------------
 -- Here we start
 --------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+-- Add students.
+plog("\nAdding a new competencies list...\n")
+--print(lastname, name, class)
+tgc:add_comp_list({
+    title          = "Compétences de SPC",
+    domains        = {{id = "1",  title = "Connaissances",},
+                      {id = "2",  title = "Communication",},
+                      {id = "3",  title = "Langage scientifique",},
+                      {id = "4",  title = "Méthodes",},
+                      {id = "5",  title = "Démarche scientifique",},
+                      {id = "6",  title = "Attitude et investissement",},
+                      {id = "*",  title = "Bonus",},},
+    competencies   = {{id = "1",  title = "Cours",},
+                      {id = "2",  title = "Structuration de l’Univers",},
+                      {id = "3",  title = "Histoire des sciences",},
+                      {id = "4",  title = "Écrit",},
+                      {id = "5",  title = "Oral",},
+                      {id = "6",  title = "Lire et exploiter des documents",},
+                      {id = "7",  title = "Tracer ou lire un schéma, un graphique ou un tableau",},
+                      {id = "8",  title = "Présenter ou réaliser un calcul",},
+                      {id = "9",  title = "Rechercher et extraire une information",},
+                      {id = "10", title = "Suivre un protocole expérimental",},
+                      {id = "11", title = "Maîtriser et utiliser l’outil numérique",},
+                      {id = "12", title = "Mener une démarche scientifique",},
+                      {id = "13", title = "Mesurer une grandeur physique",},
+                      {id = "14", title = "Savoir interpréter des résultats et conclure",},
+                      {id = "15", title = "Avoir son matériel",},
+                      {id = "16", title = "Être impliqué dans son travail",},
+                      {id = "17", title = "Avoir un comportement adapté",},
+                      {id = "18", title = "Travail facultatif",},},
+    })
+
 
 --------------------------------------------------------------------------------
 -- Add students.
@@ -252,7 +286,7 @@ for i = 1, M do
     local title            = "Evaluation n° " .. i
     local max_score        = math.random(4) * 5
     local over_max         = true_or_false()
-    local multi            = true --_or_false()
+    local multi            = true_or_false()
     local success_score_pc = math.random(100)
     if success_score_pc < 50 then success_score_pc = nil end
 
@@ -334,7 +368,6 @@ for sid in tgc:next_student() do
                     plog("/%.0f [%s], ", max_score, competencies or "")
                     tgc:add_student_result(sid, eid, {
                         date    = date,
-                        quarter = quarter,
                         grades  = grade})
 
                 end
@@ -344,7 +377,6 @@ for sid in tgc:next_student() do
             local grade, score, competencies = random_grade(max_score, over_max)
             tgc:add_student_result(sid, eid, {
                 date    = date,
-                quarter = quarter,
                 grades  = grade,
             })
             plog("  o eval %s, %s (%s) - ", eid, date, quarter)

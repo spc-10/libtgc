@@ -117,9 +117,12 @@ function Eval.new (o)
 
     e.class_p                 = o.class_p and tostring(o.class_p)
 
-    e.competencies            = o.competencies
-    -- e.competency_mask         = o.competency_mask
-    -- e.competency_score_mask   = o.competency_score_mask
+    if o.competencies and type(o.competencies == "string") then
+        e.competencies        = {}
+        string.gsub(o.competencies, "%s*(%d+)%s*", function(c) table.insert(e.competencies, c) end)
+    end
+    e.comp_list_id            = o.comp_list_id -- FIXME checks
+
     e.max_score               = tonumber(o.max_score)
     e.real_max_score          = tonumber(o.real_max_score)
     e.over_max                = o.over_max and true or false
@@ -206,6 +209,7 @@ function Eval.update (o)
         self.title = o.title
         update_done = true
     end
+    -- TODO competencies is a table so this doesn't work
     if type(o.competencies) == "string"
         and not string.match(o.competencies, "^%s*") then
         self.competencies = o.competencies
@@ -285,7 +289,7 @@ function Eval:write (f)
     --     written_score = true
     -- end
     -- FIXME: adapt to competencies format.
-    local space = ""
+    local space = " "
     if self.max_score or self.over_max or self.competencies then
         fwrite("\n%s",                          tab)
         if self.max_score then
@@ -301,7 +305,10 @@ function Eval:write (f)
             space = " "
         end
         if self.competencies then
-            fwrite("%scompetencies = %q,",      space, self.competencies)
+            fwrite("%scompetencies = %q,",      space, table.concat(self.competencies, " "))
+        end
+        if self.comp_list_id then
+            fwrite("%scomp_list_id = %q,",      space, self.comp_list_id)
         end
     end
 
@@ -433,6 +440,11 @@ function Eval:get_attempts_nb (class)
     return self.dates and self.dates[class] and #self.dates[class] or 0
 end
 
+-- Returns the quarter
+function Eval:get_quarter ()
+    return self.quarter
+end
+
 -- Returns the evaluation's score informations.
 -- Subevals inherits from its parent eval
 function Eval:get_score_infos ()
@@ -468,12 +480,19 @@ function Eval:is_multi_attempts_allowed ()
     end
 end
 -- Returns the evaluation's competencies informations.
+-- FIXME comp_list
 function Eval:get_competencies_infos ()
     if not self.parent then
-        return self.competencies
+        if self.competencies then
+            return self.competencies, #self.competencies, self.comp_list_id
+        end
     else
         local pcomp = self.parent:get_competencies_infos()
-        return self.competencies or pcomp
+        if self.competencies then
+            return self.competencies, #self.competencies
+        elseif pcomp then
+            return pcomp, #pcomp
+        end
     end
 end
 
@@ -496,6 +515,7 @@ function Eval:plog (prompt_lvl, inline)
     local category, class_p, title, subtitle         = self:get_infos()
     local class_p                                    = self:get_class_p()
     local max_score, real_max_score, over_max        = self:get_score_infos()
+    local competencies                               = self:get_competencies_infos()
     -- local competency_mask, competency_score_mask = self:get_competency_infos()
     if inline then
         utils.plog("%s%s%s (id: %s) - cat: %s - score /%d%s (succ.%d%%)%s\n",
@@ -517,8 +537,8 @@ function Eval:plog (prompt_lvl, inline)
         if self.allow_multi_attempts then
             utils.plog(" (multiple attempts)")
         end
-        if self.competencies then
-            utils.plog(" - competencies: %s\n", self.competencies)
+        if competencies then
+            utils.plog(" - competencies: %s\n", table.concat(competencies, " "))
         end
         utils.plog("\n")
     end

@@ -23,6 +23,7 @@
 -- * B mens good
 -- * C means not good
 -- * D means bad
+-- TODO remove this star part
 -- The grade may be followed by a star (*) which means that the associated
 -- evaluation was optional (and more difficult).
 --
@@ -49,16 +50,16 @@
 ]]--
 
 -- TODO this should go to `notes.lua`
-local COMPETENCIES = {
-    [1] = {id = "1.1", name = "Comprendre, s’exprimer en utilisant la langue française à l’oral et à l’écrit"},
-    [2] = {id = "1.2", name = "Comprendre, s’exprimer en utilisant une langue étrangère, et, le cas échéant, une langue régionale"},
-    [3] = {id = "1.3", name = "Comprendre, s’exprimer en utilisant les langages mathématiques, scientifiques et informatiques"},
-    [4] = {id = "1.4", name = "Comprendre, s’exprimer en utilisant les langages des arts et du corps"},
-    [5] = {id = "2",   name = "Les méthodes et outils pour apprendre"},
-    [6] = {id = "3",   name = "La formation de la personne et du citoyen"},
-    [7] = {id = "4",   name = "Les systèmes naturels et les systèmes techniques"},
-    [8] = {id = "5",   name = "Les représentations du monde et de l’activité humaine"},
-}
+--local COMPETENCIES = {
+--    [1] = {id = "1.1", name = "Comprendre, s’exprimer en utilisant la langue française à l’oral et à l’écrit"},
+--    [2] = {id = "1.2", name = "Comprendre, s’exprimer en utilisant une langue étrangère, et, le cas échéant, une langue régionale"},
+--    [3] = {id = "1.3", name = "Comprendre, s’exprimer en utilisant les langages mathématiques, scientifiques et informatiques"},
+--    [4] = {id = "1.4", name = "Comprendre, s’exprimer en utilisant les langages des arts et du corps"},
+--    [5] = {id = "2",   name = "Les méthodes et outils pour apprendre"},
+--    [6] = {id = "3",   name = "La formation de la personne et du citoyen"},
+--    [7] = {id = "4",   name = "Les systèmes naturels et les systèmes techniques"},
+--    [8] = {id = "5",   name = "Les représentations du monde et de l’activité humaine"},
+--}
 
 
 --------------------------------------------------------------------------------
@@ -90,8 +91,85 @@ end
 ]]--
 
 --------------------------------------------------------------------------------
+-- Creates a list of competencies grades.
+-- Competencies grades are a list of id and letter couples : for example {"1A", "1C", "3C", "12-"}.
+--
+--  TODO Doc
+-- @param comp_list (string) - a list of competencies ids and corresponding grades
+-- @return comp (table)
+--------------------------------------------------------------------------------
+local function create_comp_grades (comp_letters, comp_ids)
+    local comp_grades = {}
+
+    -- split the competencies
+    repeat -- split the competencies
+        comp_letters, n = string.gsub(comp_letters, "(%d+)([ABCDabcd-])([ABCDabcd-])", "%1%2 %1%3")
+    until n == 0
+    -- print("DEBUG : comp_letters = ", comp_letters)
+
+
+    if not comp_letters or string.match(comp_letters, "^%d*$") then
+        return nil
+    -- There are no comp ids at all.
+    elseif not string.match(comp_letters, "%d+") and not comp_ids then
+        -- print("DEBUG ----------- 1 --------")
+        return nil
+    -- Comp letters and ids are separated.
+    elseif not string.match(comp_letters, "%d+") then
+        --print("DEBUG ----------- 2 --------")
+        local ids_list, comp_letters_list = {}, {}
+
+        for _, id in ipairs(comp_ids) do
+            table.insert(ids_list, id)
+        end
+        for letter in string.gmatch(comp_letters, "[ABCDabcd-]") do
+            table.insert(comp_letters_list, letter)
+        end
+
+        -- Associate
+        for i, id in ipairs(ids_list) do
+            if comp_letters_list[i] then
+                table.insert(comp_grades, id .. string.upper(comp_letters_list[i]))
+            else
+                table.insert(comp_grades, id .. "-")
+            end
+        end
+    -- Comp letters are already associated with ids and no ids model given.
+    elseif string.match(comp_letters, "%d+") and not comp_ids then
+        -- print("DEBUG ----------- 3 --------")
+        for id, letters in string.gmatch(comp_letters, "(%d+)([ABCDabcd-]+)") do
+            for letter in string.gmatch(letters, ".") do
+                table.insert(comp_grades, id .. letter:upper())
+            end
+        end
+    -- Comp letters are already associated with ids and ids model given.
+    -- We must check the correspondance.
+    elseif string.match(comp_letters, "%d+") and comp_ids then
+        -- print("DEBUG ----------- 4 --------")
+        local ids_list = {}
+        local i = 1
+
+        for _, id in ipairs(comp_ids) do
+            -- print("DEBUG : id = ", id)
+            local letter = string.match(comp_letters, "%D*" ..id .. "([ABCDabcd-])")
+            -- print("DEBUG : letter = ", letter)
+            if letter then
+                table.insert(comp_grades, id .. letter:upper())
+                -- Remove matching comp
+                comp_letters = string.gsub(comp_letters, "%s*" .. id .. "[ABCDabcd-]%s*", " ", 1)
+            end
+            -- print("DEBUG : comp_letters = ", comp_letters)
+        end
+    else
+        return nil
+    end
+
+    return comp_grades
+end
+
+--------------------------------------------------------------------------------
 -- Split a list of competencies (id plus grades) into a table
--- Exemple : "1AB 2CD 4B" returns {[1] = "AB", [2] = "CD", [4] = "B"}
+-- Exemple : "1AB 2CD 4B" returns {[1] = {"A", "B"}, [2] = {"C", "D"}, [4] = {"B"}}
 --
 -- @param comp_list (string) - a list of competencies ids and corresponding grades
 -- @return comp (table)
@@ -103,9 +181,11 @@ local function split_competencies (comp_list)
 
     -- convert the result string into a table
     local comp = {}
-    for id, grades in string.gmatch(comp_list, "(%d+)([ABCDabcd%*]+)") do
-        for grade in string.gmatch(grades, "[ABCDabcd]%*?") do
-            comp[id] = (comp[id] or "") .. grade:upper()
+    for id, grades in string.gmatch(comp_list, "(%d+)([ABCDabcd-]+)") do
+        local i = tonumber(id)
+        comp[i] = comp[i] or {}
+        for grade in string.gmatch(grades, "[ABCDabcd-]%*?") do
+            table.insert(comp[i], grade:upper())
         end
     end
 
@@ -119,52 +199,105 @@ end
 -- @param comp_list (string) - a list of competencies ids and corresponding grades
 -- @return comp (table)
 --------------------------------------------------------------------------------
-local function competencies_concat (comp)
+local function competencies_concat (comp, split)
+    local split = split or false
     local comp = comp or {}
     local comp_tmp = {}
+    local sorted_comp_id = {}
+
+    -- First we get the comp_id list to sort it
+    for id, _ in pairs(comp) do
+        table.insert(sorted_comp_id, id)
+    end
+    table.sort(sorted_comp_id)
 
     -- convert the result string into a table
-    for id, grades in pairs(comp) do
-        table.insert(comp_tmp, id .. grades)
+    for _, id in ipairs(sorted_comp_id) do
+        if split then
+            for _, c in ipairs(comp[id]) do
+                table.insert(comp_tmp, id .. c)
+            end
+        else
+            table.insert(comp_tmp, id .. table.concat(comp[id]))
+        end
     end
 
-    table.sort(comp_tmp)
-
     return table.concat(comp_tmp, " ")
+end
+
+--------------------------------------------------------------------------------
+-- Convert a competencies grades table to a string
+-- Exemple : returns "1AB 2CD 4B"
+-- Style: compact or split
+-- @param comp_list (string) - a list of competencies ids and corresponding grades
+-- @return comp (table)
+--------------------------------------------------------------------------------
+local function comp_grades_tostring (comp_grades, style)
+    local style = style or "compact"
+    local compact_comp_grades_list = {}
+
+    if not comp_grades then
+        return ""
+    end
+
+    if style == "split" then
+        return table.concat(comp_grades, " ")
+    else --elseif style == "compact" then
+        for _, comp_grade in ipairs(comp_grades) do
+            id, letter = string.match(comp_grade, "(%d+)([ABCD-])")
+            i = tonumber(id)
+            if not compact_comp_grades_list[i] then
+                compact_comp_grades_list[i] = letter
+            else
+                compact_comp_grades_list[i] = compact_comp_grades_list[i] .. letter
+            end
+        end
+        -- We then sort the index
+        local sorted_comp_id = {}
+        for id, _ in pairs(compact_comp_grades_list) do
+            table.insert(sorted_comp_id, id)
+        end
+        table.sort(sorted_comp_id)
+        local comp_tmp = {}
+        for _, id in ipairs(sorted_comp_id) do
+            table.insert(comp_tmp, id .. compact_comp_grades_list[id])
+        end
+        return table.concat(comp_tmp, " ")
+    end
 end
 
 --------------------------------------------------------------------------------
 --- Associates each grade of a list to the corresponding competency id of the
 --- other list.
 --
--- @param grades (string) - a list of grades (A, B, C, D)
+-- @param comp_grades (string) - a list of comp_grades (A, B, C, D)
 -- @param ids (string) - a list of competencies ids (number)
 -- @return result (string) - the list of competencies.
 --------------------------------------------------------------------------------
-local function merge_ids_and_grades (grades, ids)
+local function associate_comp_ids_and_letters (comp_letters, comp_ids)
     local result = ""
-    local ids_list, grades_list = {}, {}
+    local ids_list, comp_grades_list = {}, {}
 
-    -- First check if the grades already contains competences ids. In this
+    -- First check if the comp_letters already contains competences ids. In this
     -- case, no need to merge.
-    if string.match(grades, "%d+") or not ids then
-        return grades
+    if string.match(comp_letters, "%d+") or not comp_ids then
+        return comp_letters
     end
 
-    -- Get the lists of grades and ids
-    for id in string.gmatch(ids, "%d+") do
+    -- Get the lists of comp_letters and comp_ids
+    for id in string.gmatch(comp_ids, "%d+") do
         table.insert(ids_list, id)
     end
-    for grade in string.gmatch(grades, "[ABCDabcd]") do
-        table.insert(grades_list, grade)
+    for grade in string.gmatch(comp_letters, "[ABCDabcd-]") do
+        table.insert(comp_grades_list, grade)
     end
 
     -- Merge
     for i, id in ipairs(ids_list) do
-        if not grades_list[i] then
+        if not comp_grades_list[i] then
             break
         else
-            result = result .. id .. grades_list[i]
+            result = result .. id .. comp_grades_list[i]
         end
     end
 
@@ -238,18 +371,24 @@ local Grade_mt = {
 -- @param eval_comp - a list of competencies ids corresponding to the competencies grade.
 -- @return g (Grade)
 --------------------------------------------------------------------------------
-function Grade.new (grade1, grade2, eval_comp)
+function Grade.new (grade1, grade2, eval_comp_ids)
     local g = setmetatable({}, Grade_mt)
 
     if type(grade1) == "number" then
         g.num  = grade1
         if type(grade2) == "string" then
-            g.comp = split_competencies(merge_ids_and_grades(grade2, eval_comp))
+            g.comp = create_comp_grades(grade2, eval_comp_ids)
         end
     elseif type(grade1) == "string" then
-        g.comp = split_competencies(merge_ids_and_grades(grade1, eval_comp))
+        g.comp = create_comp_grades(grade1, eval_comp_ids)
         if type(grade2) == "number" then
             g.num = grade2
+        end
+    elseif not grade1 then
+        if type(grade2) == "number" then
+            g.num = grade2
+        elseif type(grade2) == "string" then
+            g.comp = create_comp_grades(grade2, eval_comp_ids)
         end
     elseif type (grade1) == "table" then
         return Grade.new(grade1[1], grade1[2])
@@ -270,16 +409,92 @@ function Grade:write (f)
     if self.num and not self.comp then
         fwrite("%.2f",     self.num)
     elseif self.comp and not self.num then
-        fwrite("%q",       competencies_concat(self.comp))
+        fwrite("%q",       comp_grades_tostring(self.comp))
     elseif self.num and self.comp then
-        fwrite("{%.2f, %q}", self.num, competencies_concat(self.comp))
+        fwrite("{%.2f, %q}", self.num, comp_grades_tostring(self.comp))
     end
 end
 
 --------------------------------------------------------------------------------
 --- Get the score and competencies parts of a grade.
-function Grade:get_score_and_comp ()
-    return self.num, competencies_concat(self.comp)
+function Grade:get_score_and_competencies ()
+    return self.num, self.comp
+end
+
+--------------------------------------------------------------------------------
+--- Get the score and competencies parts of a grade.
+function Grade:get_formatted_competencies (style)
+    return comp_grades_tostring(self.comp, style)
+end
+
+--------------------------------------------------------------------------------
+--- Get the score and competencies parts of a grade.
+function Grade:get_score_and_comp (style)
+    return self.num, comp_grades_tostring(self.comp, style)
+end
+
+--------------------------------------------------------------------------------
+--- Get the mean score and competencies parts of a grade.
+function Grade:mean_competencies ()
+    local comp_grade_mean = ""
+    local comp_grade_score_sum = {}
+    local comp_grade_nval = {}
+
+    if not self.comp then
+        return nil
+    end
+
+    -- Competencies mean
+    for _, comp_grade in pairs(self.comp) do
+        --print("DEBUG : letter_grades = ", comp_grade)
+        local score, nval
+
+        id, letter = string.match(comp_grade, "(%d+)([ABCD-])")
+        local i = tonumber(id)
+        comp_grade_score_sum[i] = comp_grade_score_sum[i] or 0
+        comp_grade_nval[i]      = comp_grade_nval[i] or 0
+
+        -- TODO get letter_grades score from configuration file
+        if letter == "A" then
+            score, nval = 1, 1
+            --print("DEBUG : score, nval = 1, 1")
+        elseif letter == "B" then
+            score, nval = 0.66, 1
+            --print("DEBUG : score, nval = 0.66, 1")
+        elseif letter == "C" then
+            score, nval = 0.33, 1
+            --print("DEBUG : score, nval = 0.33, 1")
+        elseif letter == "D" then
+            score, nval = 0, 1
+            --print("DEBUG : score, nval = 0, 1")
+        else -- letter == "-"
+            score, nval = 0, 0
+            --print("DEBUG : score, nval = 0, 0")
+        end
+        --print("DEBUG : comp_grade_score_sum[i] = ", comp_grade_score_sum[i], i)
+        comp_grade_score_sum[i] = comp_grade_score_sum[i] + score
+        --print("DEBUG : comp_grade_score_sum[i] + score = ", comp_grade_score_sum[i], i)
+        comp_grade_nval[i] = comp_grade_nval[i] + nval
+    end
+
+    for id, score_sum in pairs(comp_grade_score_sum) do
+        local mean_comp_score = score_sum / comp_grade_nval[id]
+        if mean_comp_score > 0.85 then
+            comp_grade_mean = comp_grade_mean .. id .."A "
+        elseif mean_comp_score > 0.6 then
+            comp_grade_mean = comp_grade_mean .. id .."B "
+        elseif mean_comp_score > 0.3 then
+            comp_grade_mean = comp_grade_mean .. id .."C "
+        elseif mean_comp_score == 0 then
+            comp_grade_mean = comp_grade_mean .. id .."- "
+        else
+            comp_grade_mean = comp_grade_mean .. id .."D "
+        end
+    end
+
+    --print("DEBUG : comp_grade_mean = ", comp_grade_mean)
+
+    return Grade.new(self.num, comp_grade_mean)
 end
 
 

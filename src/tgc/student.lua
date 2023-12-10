@@ -349,7 +349,7 @@ function Student:add_result (o)
     -- If a result already exists, we add the new one to the existing one if
     -- the eval allows multiple attempts.
     if r then
-        return r:add_result(o)
+        return r:add_grades(o)
     -- Otherwise, we create the new result.
     else
         -- If the eval is not a subeval, we just create it.
@@ -366,12 +366,40 @@ function Student:add_result (o)
 end
 
 ---------------------------------------------------------------------------------
+-- Get the results grade list corresponding to an evaluation.
+function Student:get_grade (eid)
+    local r = self.results[eid]
+
+    if not r then
+        return nil
+    else
+        return r:get_grade()
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Get the results grade corresponding to an evaluation id and subid.
+-- @param eid the evaluation id
+-- @param subeid the subevaluation id
+-- @return the grade score and competencies
+-- TODO: Check allow_multi_attempts to return a list of grades or a unique grade?
+function Student:get_result (eid, style)
+    local r = self.results[eid]
+
+    if not r then
+        return nil
+    else
+        return r:get_result(style)
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Get the results corresponding to an evaluation id and subid.
 -- @param eid the evaluation id
 -- @param subeid the subevaluation id
 -- @return a list of grades (score and competencies)
 -- TODO: Check allow_multi_attempts to return a list of grades or a unique grade?
-function Student:get_results (eid, subeid)
+function Student:get_results (eid, subeid, style)
     local r
 
     if subeid then
@@ -383,7 +411,7 @@ function Student:get_results (eid, subeid)
     if not r then
         return nil
     else
-        return r:get_results()
+        return r:get_results(style)
     end
 end
 

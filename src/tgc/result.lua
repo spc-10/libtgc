@@ -53,7 +53,7 @@ local function create_grades (val, eval_comp)
         -- We must check if the table is a grade or a table of grade
         if #val == 1 then -- we only have one grade
             table.insert(grades, Grade.new(val[1], nil, eval_comp))
-        elseif #val == 2 and type(val[1]) == "number" and type(val[2]) == "string" then
+        elseif #val == 2 and (type(val[1]) == "number" or type(val[2]) == "string") then
             -- again only one grade
             table.insert(grades, Grade.new(val[1], val[2], eval_comp))
         else
@@ -144,24 +144,25 @@ end
 
 --------------------------------------------------------------------------------
 -- Add results to an existing one.
--- It adds scores and competencies if allowed (`allow_multi_attempts` is true).
+-- TODO To remove difinitively? -> It adds scores and competencies if allowed
+-- (`allow_multi_attempts` is true).
 -- @param o (table) - same as in new()
 -- @return
-function Result:add_result (o)
+function Result:add_grades (o)
     o = o or {}
     self.grades = self.grades or {}
 
     local competencies         = self.eval:get_competencies_infos()
-    local allow_multi_attempts = self.eval:get_multi_infos()
+    --local allow_multi_attempts = self.eval:get_multi_infos()
 
-    if not allow_multi_attempts then
-        return nil --TODO err msg
-    else
+    --if not allow_multi_attempts then
+    --    return nil --TODO err msg
+    --else
         local new_grades = create_grades(o.grades, competencies)
         for _, g in ipairs(new_grades) do
             table.insert(self.grades, g)
         end
-    end
+    --end
 end
 
 --------------------------------------------------------------------------------
@@ -231,16 +232,58 @@ function Result:write (f)
 end
 
 --------------------------------------------------------------------------------
--- Return the results grades as a score, competencies table.
-function Result:get_results ()
-    local grades = {}
-    local g = self.grades
-
-    if not next(g) then
+-- Return a list of the result grades.
+function Result:get_grades ()
+    if not self.grades and not next(self.grades) then
         return nil
     else
-        for _, grade in ipairs(g) do
-            table.insert(grades, {grade:get_score_and_comp()})
+        return self.grades
+    end
+
+end
+
+--------------------------------------------------------------------------------
+-- Return the last result grades.
+function Result:get_grade ()
+    if not self.grades and not next(self.grades) then
+        return nil
+    else
+        return self.grades[#self.grades]
+    end
+
+end
+
+--------------------------------------------------------------------------------
+-- Return the eval quarter.
+function Result:get_quarter ()
+    return self.eval:get_quarter()
+end
+
+--------------------------------------------------------------------------------
+-- Return the results grade score and competencies.
+-- If the result contains several grades, only return the last one.
+-- TODO check if it should return the last grade, the best one or something
+-- else?
+function Result:get_result (style)
+    if not next(self.grades) then
+        return nil
+    else
+        return self.grades[#self.grades]:get_score_and_comp(style)
+    end
+
+end
+
+--------------------------------------------------------------------------------
+-- Return a table of the results grades (table containing score and
+-- competencies).
+function Result:get_results (style)
+    local grades = {}
+
+    if not next(self.grades) then
+        return nil
+    else
+        for _, grade in ipairs(self.grades) do
+            table.insert(grades, {grade:get_score_and_comp(style)})
         end
     end
 
@@ -248,16 +291,77 @@ function Result:get_results ()
 end
 
 --------------------------------------------------------------------------------
+-- Return a mean grade with competencies following the evaluation model.
+function Result:get_eval_mean_grade ()
+    local competencies_sum = ""
+    local score_sum = 0
+    local score_nval = 0
+    local eval_comp_grades_nb = #self.eval.competencies
+    local eval_mean_comp_grades = {}
+
+
+    if not next(self.grades) then
+        return nil
+    else
+        for _, grade in ipairs(self.grades) do
+            local score, comp = grade:get_score_and_comp("split")
+
+            if score then
+                score_sum = score_sum + score
+                score_nval = score_nval + 1
+            end
+            if comp then
+                competencies_sum = competencies_sum .. " " .. comp
+            end
+        end
+    end
+
+    local mean_score = score_nval > 0 and score_sum / score_nval
+    local mean_grade = Grade.new(mean_score, competencies_sum)
+
+    return mean_grade:get_score_and_mean_comp()
+end
+
+--------------------------------------------------------------------------------
+-- Return a mean grade.
+function Result:get_mean_grade ()
+    local competencies_sum = ""
+    local score_sum = 0
+    local score_nval = 0
+
+    if not self.grades then
+        return nil
+    else
+        for _, grade in ipairs(self.grades) do
+            local score, comp = grade:get_score_and_comp()
+            if score then
+                score_sum = score_sum + score
+                score_nval = score_nval + 1
+            end
+            if comp then
+                competencies_sum = competencies_sum .. " " .. comp
+            end
+        end
+    end
+
+    local mean_score = score_nval > 0 and score_sum / score_nval
+    local mean_grade = Grade.new(mean_score, competencies_sum)
+
+    return mean_grade:get_score_and_mean_comp()
+end
+
+--------------------------------------------------------------------------------
 -- Return the eval result attributes.
 function Result:get_eval_ids ()
     return self.eval:get_ids()
 end
+function Result:get_competencies_infos ()
+    return self.eval:get_competencies_infos()
+end
+-- FIXME doesn't work?
 function Result:get_score_infos ()
     local max_score, real_max_score, over_max = self.eval:get_score_infos()
     return self.score, max_score, real_max_score, over_max
-end
-function Result:get_competencies_infos ()
-    return self.competencies
 end
 
 --------------------------------------------------------------------------------
