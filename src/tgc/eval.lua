@@ -59,17 +59,6 @@ local function eval_type_default ()
 end
 
 --------------------------------------------------------------------------------
--- Splits an eval index into the eval part and the subeval part.
--- @param fancy_eid a string in the format "eid[.subid]" where eid and subid are
--- integers
--- @return eid eval index
--- @return subid subeval index
-local function split_fancy_eval_index (fancy_eid)
-    local eid, subid = string.match(fancy_eid, "(%d+)%.*(%d*)")
-    return tonumber(eid), tonumber(subid)
-end
-
---------------------------------------------------------------------------------
 -- Checks if an eval result has the right format.
 -- The result should be a table with a valid date and a valid quarter.
 -- @param result (table)
@@ -110,7 +99,7 @@ function Eval.new (o)
 
     -- Assign attributes
     e.parent                  = o.parent
-    e.id                      = tonumber(string.match(o.id, "%d-%.*(%d+)")) -- subeval id is store as X.Y
+    e.id                      = tonumber(o.id)
     e.title                   = o.title and tostring(o.title)
     e.subtitle                = o.subtitle and tostring(o.subtitle)
     e.category                = eval_type_exists(o.category) and o.category
@@ -130,16 +119,7 @@ function Eval.new (o)
     e.allow_multi_attempts    = o.allow_multi_attempts and true or false
     e.success_score_pc        = tonumber(o.success_score_pc)
 
-    -- Subevals stuff
-    -- TODO: to remove?
-    e.subevals                = {}
-    if o.subevals and type(o.subevals == "table")  then
-        for _, subeval in pairs(o.subevals) do
-            local eid, subeid = split_fancy_eval_index(subeval.id)
-            subeval.parent = e
-            e.subevals[subeid] = Eval.new(subeval)
-        end
-    end
+    e.optional               = o.optional and true
 
     -- Results stuff (dates and quarter for each class)
     e.quarter                 = tonumber(o.quarter)
@@ -152,16 +132,6 @@ function Eval.new (o)
     end
 
     return e
-end
-
---------------------------------------------------------------------------------
--- Creates a sub evaluation to an existing evaluation.
--- @param o (table) - same parameters as in new()
--- @return the index in the subevals list
-function Eval:add_subeval (o)
-    local o = o or {}
-    o.parent = self
-    return table.insert(self.subevals, Eval.new(o))
 end
 
 --------------------------------------------------------------------------------
@@ -244,16 +214,11 @@ function Eval:write (f)
     local function fwrite (...) f:write(string.format(...)) end
     local tab = ""
 
-    -- Open for eval (not subevals)
-    local _, _, fancy_eid = self:get_ids()
-    if self.parent then
-        tab = "            "
-        fwrite("        {id = %q,",             fancy_eid)
-    else
-        tab = "    "
-        fwrite("evaluation_entry{\n    ")
-        fwrite("id = %q,",                      fancy_eid)
-    end
+    -- Opening
+    local eid = self:get_id()
+    tab = "    "
+    fwrite("evaluation_entry{\n    ")
+    fwrite("id = %q,",                          eid)
 
     -- Evaluation attributes
     if self.title or self.subtitle then
@@ -343,32 +308,9 @@ function Eval:write (f)
         fwrite("\n%s},",                         tab)
     end
 
-    -- Only print non empty subevals
-    -- TODO: Order the subevals
-    if next(self.subevals) then
-        fwrite("\n%ssubevals = {\n",            tab)
-        for _, subeval in pairs(self.subevals) do
-            subeval:write(f)
-        end
-        fwrite("    },\n")
-    end
-
-    -- Close for eval (not subevals)
-    if self.parent then
-        fwrite(" },\n")
-    elseif next(self.subevals) then
-        fwrite("}\n")
-    else
-        fwrite("\n}\n")
-    end
+    fwrite("\n}\n")
 
     f:flush()
-end
-
---------------------------------------------------------------------------------
--- Returns the last subevaluation index.
-function Eval:get_last_subeval_index ()
-    return #self.subevals
 end
 
 --------------------------------------------------------------------------------
@@ -376,51 +318,27 @@ end
 function Eval:get_class_p ()
     return self.class_p
 end
+
 -- Returns the evaluation's main informations.
 -- @return id the eval index
--- @return subid the subeval index or `nil` if the eval doesn't belong to another eval
--- @return a full id string like "X.Y"
 -- TODO
-function Eval:get_ids ()
-    if self.parent then
-        local id, subid = self.parent:get_ids(), self.id
-        local fancy_eid = id .. "." .. subid
-        return id, subid, fancy_eid
-    else
-        return self.id, nil, self.id
-    end
+function Eval:get_id ()
+    return self.id
 end
 
 -- Returns the evaluation's main informations.
--- Subevals inherits from its parent eval
 -- @return TODO
 function Eval:get_infos ()
-    if not self.parent then
-        return self.category, self.class_p, self.title, self.subtitle
-    else
-        local pcat, pclass_p, ptitle, psubtitle = self.parent:get_infos()
-        return self.category or pcat,
-            self.class_p or pclass_p,
-            self.title or ptitle,
-            self.subtitle or psubtitle
-    end
+    return self.category, self.class_p, self.title, self.subtitle
 end
 
 -- Returns the evaluation's titles.
--- Subevals inherits from its parent eval
 -- @return title, subtitle
 function Eval:get_title ()
-    if not self.parent then
-        return self.title, self.subtitle
-    else
-        local ptitle, psubtitle = self.parent:get_title()
-        return self.title or ptitle,
-            self.subtitle or psubtitle
-    end
+    return self.title, self.subtitle
 end
 
 -- Returns the evaluation's full title (title + subtitle).
--- Subevals inherits from its parent eval
 -- @return fulltitle
 function Eval:get_fulltitle (sep)
     local sep = sep or " "
@@ -446,57 +364,30 @@ function Eval:get_quarter ()
 end
 
 -- Returns the evaluation's score informations.
--- Subevals inherits from its parent eval
 function Eval:get_score_infos ()
-    if not self.parent then
-        return self.max_score or DEFAULT_MAX_SCORE,
-            self.real_max_score,
-            self.over_max
-    else
-        local pmax, prealmax, pover = self.parent:get_score_infos()
-        return self.max_score or pmax,
-            self.real_max_score or prealmax,
-            self.over_max or pover
-    end
+    return self.max_score, self.real_max_score, self.over_max
 end
 -- Returns the evaluation's informations about multiple attempts.
 -- Subevals inherits from its parent eval
 function Eval:get_multi_infos ()
-    if not self.parent then
-        return self.allow_multi_attempts,
-            self.success_score_pc
-    else
-        local pallow, psuccess = self.parent:get_multi_infos()
-        return self.allow_multi_attempts or pallow,
-            self.success_score_pc or psucces
-    end
+    return self.allow_multi_attempts, self.success_score_pc
 end
 -- Checks if the eval allows multiple attempts.
 function Eval:is_multi_attempts_allowed ()
-    if not self.parent then
-        return self.allow_multi_attempts
-    else
-        return self.parent:is_multi_attempts_allowed()
-    end
+    return self.allow_multi_attempts
 end
 -- Returns the evaluation's competencies informations.
 -- FIXME comp_list
 function Eval:get_competencies_infos ()
-    if not self.parent then
-        if self.competencies then
-            return self.competencies, #self.competencies, self.comp_list_id
-        end
-    else
-        local pcomp = self.parent:get_competencies_infos()
-        if self.competencies then
-            return self.competencies, #self.competencies
-        elseif pcomp then
-            return pcomp, #pcomp
-        end
+    if self.competencies then
+        return self.competencies, #self.competencies, self.comp_list_id
     end
 end
 
-
+-- Is the eval optional?
+function Eval:is_optional ()
+    return self.optional and true or false
+end
 
 
 --------------------------------------------------------------------------------
@@ -511,7 +402,7 @@ function Eval:plog (prompt_lvl, inline)
     local tab = "  "
     local prompt = string.rep(tab, prompt_lvl)
 
-    local _, _, fancy_eid                            = self:get_ids()
+    local eid                                  = self:get_id()
     local category, class_p, title, subtitle         = self:get_infos()
     local class_p                                    = self:get_class_p()
     local max_score, real_max_score, over_max        = self:get_score_infos()
@@ -521,14 +412,14 @@ function Eval:plog (prompt_lvl, inline)
         utils.plog("%s%s%s (id: %s) - cat: %s - score /%d%s (succ.%d%%)%s\n",
         prompt, title,
         subtitle and " - " .. subtitle or "",
-        fancy_eid, category,
+        eid, category,
         max_score, over_max and " [+]" or "",
         self.success_score_pc or 50,
         competencies and " - comp. " .. competencies or "")
     else
         utils.plog("%s%s", prompt, title)
         utils.plog("%s", subtitle and " - " .. subtitle or "")
-        utils.plog(" (id: %s)\n", fancy_eid)
+        utils.plog(" (id: %s)\n", eid)
         utils.plog("%s%s- category: %s - class: %s\n", prompt, tab, category, class_p)
         utils.plog("%s%s- score: /%d%s", prompt, tab, max_score, over_max and " [+]" or "")
         if self.success_score_pc then
@@ -542,15 +433,6 @@ function Eval:plog (prompt_lvl, inline)
         end
         utils.plog("\n")
     end
-
-    -- Only print non empty subevals
-    if next(self.subevals) and not inline then
-        utils.plog("%s%s- subevals :\n", prompt, tab)
-        for _, subeval in pairs(self.subevals) do
-            subeval:plog(prompt_lvl + 2, true)
-        end
-    end
-
 end
 
 

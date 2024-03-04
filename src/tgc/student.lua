@@ -337,14 +337,8 @@ function Student:add_result (o)
     assert(e, "Cannot add a result with no associated evaluation to a student")
 
     -- Get the result correspond to the eval ids.
-    local eid, subeid = e:get_ids()
-    local r
-    if subeid then
-        r = self.results[eid] and self.results[eid].subresults[subeid]
-    else
-        r = self.results[eid]
-    end
-
+    local eid = e:get_id()
+    local r = self.results[eid]
 
     -- If a result already exists, we add the new one to the existing one if
     -- the eval allows multiple attempts.
@@ -352,16 +346,8 @@ function Student:add_result (o)
         return r:add_grades(o)
     -- Otherwise, we create the new result.
     else
-        -- If the eval is not a subeval, we just create it.
-        if not subeid then
-            self.results[eid] = Result.new(o)
-            return -- return something?
-        else
-        -- If it is a subeval, we first create the parent eval if it doesn't exist.
-            self.results[eid] = self.results[eid] or Result.new({eval = e.parent})
-            self.results[eid].subresults = self.results[eid].subresults or {}
-            self.results[eid].subresults[subeid] = Result.new(o)
-        end
+        self.results[eid] = Result.new(o)
+        return -- return something?
     end
 end
 
@@ -394,19 +380,28 @@ function Student:get_result (eid, style)
 end
 
 ---------------------------------------------------------------------------------
+-- Get the results mean grade corresponding to an evaluation id and subid.
+-- @param eid the evaluation id
+-- @return the grade score and competencies
+-- TODO: Check allow_multi_attempts to return a list of grades or a unique grade?
+function Student:get_mean_grade (eid, style)
+    local r = self.results[eid]
+
+    if not r then
+        return nil
+    else
+        return r:get_mean_grade(style)
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Get the results corresponding to an evaluation id and subid.
 -- @param eid the evaluation id
--- @param subeid the subevaluation id
 -- @return a list of grades (score and competencies)
 -- TODO: Check allow_multi_attempts to return a list of grades or a unique grade?
-function Student:get_results (eid, subeid, style)
-    local r
-
-    if subeid then
-        r = self.results[eid] and self.results[eid].subresults[subeid]
-    else
-        r = self.results[eid]
-    end
+-- FIXME : Should be named get_grade()
+function Student:get_results (eid, style)
+    local r = self.results[eid]
 
     if not r then
         return nil

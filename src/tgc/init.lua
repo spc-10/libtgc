@@ -350,7 +350,6 @@ end
 -- Adds a new student's result.
 -- @param sid the student index
 -- @param eid the eval index
--- @param[opt=nil] subeid the index of a subevaluation
 -- @param o the result's attributes (see Result class)
 function Tgc:add_student_result (sid, eid, o)
     o = o or nil
@@ -416,7 +415,7 @@ function Tgc:get_student_competencies_base (sid, quarter, comp_list_id)
     for _, r in pairs(s.results) do
         -- if no quarter specified, get all the results
         if not quarter or r:get_quarter() == tonumber(quarter) then
-            local eid = r:get_eval_ids()
+            local eid = r:get_eval_id()
 
             -- FIXME: what to do if the evals have different competencies lists?
             local _, _, eval_comp_list_id = r:get_competencies_infos()
@@ -740,21 +739,20 @@ end
 -- Checks if an evaluation exists.
 -- @param eid the evaluation index
 -- @return the evaluation index
-function Tgc:eval_exists(eid, subeid)
+function Tgc:eval_exists(eid)
     -- TODO
 end
 
 --------------------------------------------------------------------------------
--- Checks if an evaluation have subevals.
--- TODO: handle subsubevals?
+-- Checks if an evaluation exists.
 -- @param eid the evaluation index
--- @return true or false
-function Tgc:has_subevals(eid)
+-- @return the evaluation index
+function Tgc:is_eval_optional(eid)
     local e = self.evaluations[eid]
     if e then
-        return e:get_last_subeval_index() > 0 and true or false
+        return e:is_optional()
     else
-        return false
+        return nil
     end
 end
 
@@ -768,20 +766,6 @@ function Tgc:get_unused_eval_id ()
             return i
         end
         i = i + 1
-    end
-end
-
---------------------------------------------------------------------------------
--- Get the last subeval id
--- @param eid the eval index
--- @return an unused index or nul if the eval has no sub eval
-function Tgc:get_last_eval_subid (eid)
-    local e = self.evaluations[eid]
-
-    if e then
-        return e:get_last_subeval_index()
-    else
-        return nil
     end
 end
 
@@ -804,31 +788,10 @@ function Tgc:add_eval (o)
 end
 
 --------------------------------------------------------------------------------
--- Adds a sub part for an evaluation.
--- The index must be the one of an existing evaluation
--- @param eid the parent evaluation id
--- @param o the subeval attributes
--- @see Eval
-function Tgc:add_subeval (eid, o)
-    local o = o or {}
-    local e = self.evaluations[eid]
-
-    if e then
-        o.id = e:get_last_subeval_index() + 1
-        o.parent = e
-        return e:add_subeval(o)
-    else
-        return nil -- TODO error msg
-    end
-end
-
---------------------------------------------------------------------------------
 -- Find evaluations.
 -- @param title_p a title pattern
 -- @param class a class which made the evaluation
--- @param eval_type[opt="parent"] only search in parent, subeval or both evaluations
 -- @return a list of indexes of the evaluations.
--- TODO: search in subevals too...
 function Tgc:find_evals(title_p, class_p)
     local eids = {}
 

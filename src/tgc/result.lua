@@ -85,17 +85,14 @@ local Result_mt = {
 function Result_mt.__lt (a, b)
     -- name of th id field depend on the result or subresult level.
     -- FIXME: -1 or error?
-    local a_eid, a_subeid = a:get_eval_ids()
-    local b_eid, b_subeid = b:get_eval_ids()
+    local a_eid = a:get_eval_id()
+    local b_eid = b:get_eval_id()
 
     -- first compare eid
     if a_eid and b_eid and a_eid < b_eid then
         return true
     elseif a_eid and b_eid and a_eid > b_eid then
         return false
-    -- then compare subeid
-    elseif a_subeid and b_subeid and a_subeid < b_subeid then
-        return true
     else
         return false
     end
@@ -127,17 +124,6 @@ function Result.new (o)
     -- Grades can be a single object or a table of grades
     -- TODO: handle errors?
     r.grades                  = create_grades(o.grades, o.eval.competencies)
-
-    -- Subresults (only one depth)
-    r.subresults = {}
-    if o.subresults and type(o.subresults) == "table" then
-        for _, subresult in pairs(o.subresults) do
-            --print("DEBUG : adding subresult = ", subresult)
-            local eid, subeid = Eval.split_fancy_eval_index(subresult.eval_id)
-            subresult.eval = o.eval.subevals[subeid]
-            r.subresults[subeid] = Result.new(subresult)
-        end
-    end
 
     return r
 end
@@ -196,14 +182,10 @@ function Result:write (f)
     local format = string.format
     local function fwrite (...) f:write(string.format(...)) end
 
-    local eid, subeid = self:get_eval_ids()
+    local eid = self:get_eval_id()
 
     -- Result attributes
-    if subeid then
-        fwrite("            {eval_id = %q.%q, ", eid, subeid)
-    else
-        fwrite("        {eval_id = %q,",         eid)
-    end
+    fwrite("        {eval_id = %q,",         eid)
 
     if self.grades then
         fwrite(" grades = {")
@@ -214,15 +196,6 @@ function Result:write (f)
             first = false
         end
         fwrite("},")
-    end
-
-    -- Subresults (results for sub evaluations)
-    if next(self.subresults) then
-        fwrite(" subresults = {\n")
-        for _, subresult in ipairs(self.subresults) do
-            subresult:write(f)
-        end
-        fwrite("},\n         ")
     end
 
     -- Close
@@ -345,15 +318,16 @@ function Result:get_mean_grade ()
     end
 
     local mean_score = score_nval > 0 and score_sum / score_nval
-    local mean_grade = Grade.new(mean_score, competencies_sum)
+    local sum_grade  = Grade.new(mean_score, competencies_sum)
+    local mean_grade = sum_grade:mean_competencies()
 
-    return mean_grade:get_score_and_mean_comp()
+    return mean_grade:get_score_and_comp()
 end
 
 --------------------------------------------------------------------------------
 -- Return the eval result attributes.
-function Result:get_eval_ids ()
-    return self.eval:get_ids()
+function Result:get_eval_id ()
+    return self.eval:get_id()
 end
 function Result:get_competencies_infos ()
     return self.eval:get_competencies_infos()
