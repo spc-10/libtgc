@@ -5,6 +5,9 @@
 - [X] Ramener tous les appels des bases de données à Tgc...
 - [X] Use `pairs()` and `table.sort` to Students and Evals traversal.
 
+## Eval
+- [ ] Add `homework` and `group` tags
+
 ## Old todo
 - [ ] Use a config file in `$XDG_DATA_HOME`
 - [X] Affichage des évals

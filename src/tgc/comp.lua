@@ -6,24 +6,26 @@
 -- @license GNU/GPL (see COPYRIGHT file)
 -- @module comp
 
+-- TODO
+-- FIXME: better handling of alternate comp
 
 --------------------------------------------------------------------------------
 -- Competencies list class
 -- Sets default attributes and metatables.
-local Comp_list = {
+local Comp_fw = {
 }
 
-local Comp_list_mt = {
-    __index = Comp_list,
+local Comp_fw_mt = {
+    __index = Comp_fw,
 }
 
 
 --------------------------------------------------------------------------------
 -- Creates a new competencies list.
 -- TODO: documentation
--- @return l (Comp_list)
-function Comp_list.new (o)
-    local l = setmetatable({}, Comp_list_mt)
+-- @return f (Comp_fw)
+function Comp_fw.new (o)
+    local f = setmetatable({}, Comp_fw_mt)
 
     -- Make sure the comp list has an id and a title.
     local o = o or {}
@@ -31,38 +33,38 @@ function Comp_list.new (o)
     assert(o.title and not string.find(o.title, "^%s*$"), "invalid competencies list title")
 
     -- Assign attributes
-    l.id                      = tonumber(o.id)
-    l.title                   = o.title and tostring(o.title)
-    l.link                    = o.link and tonumber(o.link)
+    f.id                      = tonumber(o.id)
+    f.title                   = o.title and tostring(o.title)
+    f.altid                   = o.altid and tonumber(o.altid)
+
+    f.coefficient             = o.coefficient and tonumber(o.coefficient)
 
     -- Add competencies domains
-    l.domains                 = {}
+    f.domains                 = {}
     if o.domains and type(o.domains == "table")  then
         for _, domain in ipairs(o.domains) do
             assert(domain.id, "invalid domain id for competencies list")
-            table.insert(l.domains, domain)
+            table.insert(f.domains, domain)
         end
     end
 
     -- Add competencies
-    l.competencies            = {}
+    f.competencies            = {}
     if o.competencies and type(o.competencies == "table")  then
         for _, comp in ipairs(o.competencies) do
             assert(comp.title, "invalid domain id for competencies list")
-            table.insert(l.competencies, comp)
+            table.insert(f.competencies, comp)
         end
     end
 
-    return l
+    return f
 end
 
 --------------------------------------------------------------------------------
--- Update an existing evaluation.
+-- Update an existing competencies framework.
 -- FIXME: doesn't work yet!
 -- @param o (table) - table containing the evaluation attributes to modify.
--- See Eval.new() for attributes.
--- @return (bool) true if an update has been done, false otherwise.
-function Comp_list.update (o)
+function Comp_fw.update (o)
     o = o or {}
     local update_done = false
 
@@ -107,17 +109,23 @@ end
 --------------------------------------------------------------------------------
 -- Write the competencies list in a file.
 -- @param f (file) - file (open for writing)
-function Comp_list:write (f)
+function Comp_fw:write (f)
     local function fwrite (...) f:write(string.format(...)) end
     local tab   = "   "
     local space = " "
 
-    fwrite("comp_list_entry{\n%s",              tab)
+    fwrite("comp_fw_entry{\n%s",                tab)
     fwrite("id = %q,",                          self.id)
     fwrite("%stitle = %q,",                     space, self.title)
 
-    if self.link then
-        fwrite("\n%slink = %q,",                tab, self.link)
+    if self.altid then
+        fwrite("\n%saltid = %q,",               tab, self.altid)
+    end
+
+    -- Coefficient part
+    if self.coefficient then
+        fwrite("\n%s",                          tab)
+        fwrite("coefficient = %.2f,",           self.coefficient)
     end
 
     -- Domains
@@ -132,6 +140,15 @@ function Comp_list:write (f)
             if domain.score then
                 fwrite("%sscore = %q,",         space, domain.score)
             end
+            if domain.score_opt and next(domain.score_opt) then
+                fwrite("%sscore_opt = {",       space, domain.score_opt)
+                space = ""
+                for _, opt in ipairs(domain.score_opt) do
+                    fwrite("%s%q,",             space, opt)
+                    space = " "
+                end
+                fwrite("},")
+            end
             fwrite("},")
         end
         fwrite("\n%s},",                        tab)
@@ -141,19 +158,32 @@ function Comp_list:write (f)
     if self.competencies then
         fwrite("\n%scompetencies = {",          tab)
         for _, comp in ipairs(self.competencies) do
+            space = ""
             local tab = "      "
-            fwrite("\n%s{title = %q,",          tab, comp.title)
+            fwrite("\n%s{",                     tab)
+            if comp.id then
+                fwrite("%sid = %q,",            space, comp.id)
+                space = " "
+            end
+            fwrite("%stitle = %q,",             space, comp.title)
+            space = " "
             if comp.domain then
                 fwrite("%sdomain = %q,",        space, comp.domain)
             end
-            --if comp.score then
-            --    fwrite("%sscore = %q,",         space, comp.score)
-            --end
-            if comp.link then
-                fwrite("%slink = %q,",          space, comp.link)
+            if comp.alt then
+                fwrite("%salt = %q,",           space, comp.alt)
             end
-            if comp.base then
-                fwrite("%sbase = %q,",          space, comp.base)
+            if comp.score then
+                fwrite("%sscore = %q,",         space, comp.score)
+            end
+            if comp.score_opt and next(comp.score_opt) then
+                fwrite("%sscore_opt = {",       space, comp.score_opt)
+                space = ""
+                for _, opt in ipairs(comp.score_opt) do
+                    fwrite("%s%q,",             space, opt)
+                    space = " "
+                end
+                fwrite("},")
             end
             fwrite("},")
         end
@@ -167,94 +197,156 @@ function Comp_list:write (f)
 end
 
 --------------------------------------------------------------------------------
--- Returns a competencies to domain conversion table.
-function Comp_list:comp_to_domain ()
-    local conv_table = {}
-
-    for c, comp in ipairs(self.competencies) do
-        conv_table[tostring(c)] = self.competencies[c].domain
-    end
-
-    return conv_table
+-- Returns the title
+function Comp_fw:get_infos ()
+    return self.title
 end
 
 --------------------------------------------------------------------------------
--- Returns a competencies to domain conversion table.
-function Comp_list:comp_to_base ()
-    local conv_table = {}
+-- Returns the id of the alternate framework
+function Comp_fw:get_altid ()
+    return self.altid
+end
 
-    for c, comp in ipairs(self.competencies) do
-        conv_table[tostring(c)] = self.competencies[c].base
-    end
-
-    return conv_table
+--------------------------------------------------------------------------------
+-- Returns the coefficient
+function Comp_fw:get_coefficient ()
+    return self.coefficient or 1.0
 end
 
 --------------------------------------------------------------------------------
 -- Returns the number of domains
-function Comp_list:get_domain_infos (index)
-    if not self.domains[index] then return nil end
-
-    return self.domains[index].id, self.domains[index].title, self.domains[index].score
-end
-
-
---------------------------------------------------------------------------------
--- Returns the number of domains
-function Comp_list:get_domain_nb ()
+function Comp_fw:get_domain_nb ()
     return #self.domains
 end
+
+--------------------------------------------------------------------------------
+-- Returns the number of domains
+function Comp_fw:get_domain_id_list ()
+    return #self.domains
+end
+
+--------------------------------------------------------------------------------
+-- Returns the domain infos
+-- @return id, title
+function Comp_fw:get_domain_infos (dom_id)
+    if not self.domains[dom_id] then return nil end
+
+    return self.domains[dom_id].id, self.domains[dom_id].title
+end
+
+--------------------------------------------------------------------------------
+-- Returns the domain score
+function Comp_fw:get_domain_score (dom_id)
+    if not self.domains[dom_id] then return nil end
+
+    return self.domains[dom_id].score
+end
+
+--------------------------------------------------------------------------------
+-- Returns the coefficient
+function Comp_fw:get_domain_score_opt (dom_id)
+    local domain = self.domains[dom_id]
+    if not domain or not domain.score_opt or not next(domain.score_opt) then
+        return nil
+    end
+
+    local keep_best, mandatory
+    for _, opt in pairs(domain.score_opt) do
+        if opt == "keep_best" then
+            keep_best = true
+        elseif opt == "mandatory" then
+            mandatory = true
+        end
+    end
+
+    return keep_best or false,
+        mandatory or false
+end
+
+--------------------------------------------------------------------------------
+-- Returns a competencies to domain conversion table.
+function Comp_fw:get_domain_hashtable ()
+    local hashtable = {}
+
+    for c, comp in ipairs(self.competencies) do
+        hashtable[tostring(c)] = self.competencies[c].domain
+    end
+
+    return hashtable
+end
+
+--------------------------------------------------------------------------------
+-- Returns a competencies to alternate competencies conversion table.
+function Comp_fw:get_alt_hashtable ()
+    local hashtable = {}
+
+    for c, comp in ipairs(self.competencies) do
+        hashtable[tostring(c)] = tostring(comp.alt)
+    end
+
+    return hashtable
+end
+
+--------------------------------------------------------------------------------
+-- Returns a competencies to fancy id competencies conversion table.
+function Comp_fw:get_fancy_id_hashtable ()
+    local hashtable = {}
+
+    for c, comp in ipairs(self.competencies) do
+        hashtable[tostring(c)] = comp.id
+    end
+
+    return hashtable
+end
+
+--------------------------------------------------------------------------------
+-- Returns the competencies infos
+function Comp_fw:get_comp_infos (comp_id)
+    if not self.competencies[comp_id] then return nil end
+
+    return self.competencies[comp_id].id, self.competencies[comp_id].title,
+           self.competencies[comp_id].domain, self.competencies[comp_id].alt
+end
+
+--------------------------------------------------------------------------------
+-- Returns a list of the domain competencies indexes.
+-- if no index, returns all the competencies indexes.
+function Comp_fw:get_domain_comp_list (dom_id)
+    local comp_list = {}
+
+    if not dom_id then
+        if not self.competencies then
+            return nil
+        else
+            for c, _ in ipairs(self.competencies) do
+                table.insert(comp_list, c)
+            end
+        end
+    elseif not self.domains[dom_id] then
+        return nil
+    else
+        for c, comp in ipairs(self.competencies) do
+            if comp.domain == dom_id then
+                table.insert(comp_list, c)
+            end
+        end
+    end
+
+    return comp_list
+end
+
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 -- Prints the database informations in a human readable way.
-function Comp_list:plog (prompt_lvl, inline)
+function Comp_fw:plog (prompt_lvl, inline)
     --local inline  = inline or false
 
     --local prompt_lvl = prompt_lvl or 0
     --local tab = "  "
     --local prompt = string.rep(tab, prompt_lvl)
-
-    --local _, _, fancy_eid                            = self:get_ids()
-    --local category, class_p, title, subtitle         = self:get_infos()
-    --local class_p                                    = self:get_class_p()
-    --local max_score, real_max_score, over_max        = self:get_score_infos()
-    ---- local competency_mask, competency_score_mask = self:get_competency_infos()
-    --if inline then
-    --    utils.plog("%s%s%s (id: %s) - cat: %s - score /%d%s (succ.%d%%)%s\n",
-    --    prompt, title,
-    --    subtitle and " - " .. subtitle or "",
-    --    fancy_eid, category,
-    --    max_score, over_max and " [+]" or "",
-    --    self.success_score_pc or 50,
-    --    competencies and " - comp. " .. competencies or "")
-    --else
-    --    utils.plog("%s%s", prompt, title)
-    --    utils.plog("%s", subtitle and " - " .. subtitle or "")
-    --    utils.plog(" (id: %s)\n", fancy_eid)
-    --    utils.plog("%s%s- category: %s - class: %s\n", prompt, tab, category, class_p)
-    --    utils.plog("%s%s- score: /%d%s", prompt, tab, max_score, over_max and " [+]" or "")
-    --    if self.success_score_pc then
-    --        utils.plog(" (succ. %d%%)", self.success_score_pc)
-    --    end
-    --    if self.allow_multi_attempts then
-    --        utils.plog(" (multiple attempts)")
-    --    end
-    --    if self.competencies then
-    --        utils.plog(" - competencies: %s\n", self.competencies)
-    --    end
-    --    utils.plog("\n")
-    --end
-
-    ---- Only print non empty subevals
-    --if next(self.subevals) and not inline then
-    --    utils.plog("%s%s- subevals :\n", prompt, tab)
-    --    for _, subeval in pairs(self.subevals) do
-    --        subeval:plog(prompt_lvl + 2, true)
-    --    end
-    --end
-
 end
 
 
-return setmetatable({new = Comp_list.new}, nil)
+return setmetatable({new = Comp_fw.new}, nil)

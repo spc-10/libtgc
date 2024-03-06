@@ -18,33 +18,11 @@ local is_date_valid, is_quarter_valid = utils.is_date_valid, utils.is_quarter_va
 -- Helpers
 
 --------------------------------------------------------------------------------
--- List the scores with a specified format.
--- @param score (table)
--- @format string like in string.format()
--- @sep string to use as separator
--- @return a string with concatenated scores
-local function list_scores (score, fmt, sep)
-    local fmt = fmt or "%.2f"
-    local formated_score = {}
-    local sep = sep or ","
-
-    if type(score) == "table" then
-        for i = 1, #score do
-            formated_score[i] = string.format(fmt, score[i])
-        end
-
-        return table.concat(formated_score, sep)
-    else
-        return string.format(fmt, score)
-    end
-end
-
---------------------------------------------------------------------------------
 -- Creates a grade or a list of grades.
 -- @param val (number or string or table) @see Grade class
 -- @param val (table of number or string or table) will be a table of Grades
 -- @return Grade or a table of Grades
-local function create_grades (val, eval_comp)
+local function create_grade (val, eval_comp)
     local grades = {}
 
     if type(val) == "number" or type(val) == "string" then
@@ -123,7 +101,7 @@ function Result.new (o)
     r.eval                    = o.eval
     -- Grades can be a single object or a table of grades
     -- TODO: handle errors?
-    r.grades                  = create_grades(o.grades, o.eval.competencies)
+    r.grades                  = create_grade(o.grades, o.eval.competencies)
 
     return r
 end
@@ -134,7 +112,7 @@ end
 -- (`allow_multi_attempts` is true).
 -- @param o (table) - same as in new()
 -- @return
-function Result:add_grades (o)
+function Result:add_grade (o)
     o = o or {}
     self.grades = self.grades or {}
 
@@ -144,7 +122,7 @@ function Result:add_grades (o)
     --if not allow_multi_attempts then
     --    return nil --TODO err msg
     --else
-        local new_grades = create_grades(o.grades, competencies)
+        local new_grades = create_grade(o.grades, competencies)
         for _, g in ipairs(new_grades) do
             table.insert(self.grades, g)
         end
@@ -157,7 +135,7 @@ end
 -- See Result.new()
 -- @return (bool) true if an update has been done, false otherwise.
 -- FIXME: not working.
---function Result:update (o)
+--function Result:update_grade (o)
 --    local update_done = false
 --
 --    -- Update valid attributes
@@ -206,140 +184,66 @@ end
 
 --------------------------------------------------------------------------------
 -- Return a list of the result grades.
-function Result:get_grades ()
-    if not self.grades and not next(self.grades) then
+-- TODO Should only works with multiple attempts evaluations. Add checker?
+function Result:get_grade_list ()
+    local grade_list = {}
+    if not self.grades or not next(self.grades) then
         return nil
     else
-        return self.grades
+        for _, grade in ipairs(self.grades) do
+            table.insert(grade_list, {grade:get_score_and_comp()})
+        end
+        return grade_list
     end
-
 end
 
 --------------------------------------------------------------------------------
--- Return the last result grades.
+-- Return the result grades.
 function Result:get_grade ()
-    if not self.grades and not next(self.grades) then
+    if not self.grades or not next(self.grades) then
         return nil
-    else
-        return self.grades[#self.grades]
     end
 
+    -- TODO handle multiple attempts
+    --local allow_multi_attempts = self:get_multi_infos()
+
+    return self.grades[#self.grades]:get_score_and_comp()
 end
 
 --------------------------------------------------------------------------------
 -- Return the eval quarter.
+-- @return quarter
 function Result:get_quarter ()
     return self.eval:get_quarter()
 end
 
 --------------------------------------------------------------------------------
--- Return the results grade score and competencies.
--- If the result contains several grades, only return the last one.
--- TODO check if it should return the last grade, the best one or something
--- else?
-function Result:get_result (style)
-    if not next(self.grades) then
-        return nil
-    else
-        return self.grades[#self.grades]:get_score_and_comp(style)
-    end
-
-end
-
---------------------------------------------------------------------------------
--- Return a table of the results grades (table containing score and
--- competencies).
-function Result:get_results (style)
-    local grades = {}
-
-    if not next(self.grades) then
-        return nil
-    else
-        for _, grade in ipairs(self.grades) do
-            table.insert(grades, {grade:get_score_and_comp(style)})
-        end
-    end
-
-    return grades
-end
-
---------------------------------------------------------------------------------
--- Return a mean grade with competencies following the evaluation model.
-function Result:get_eval_mean_grade ()
-    local competencies_sum = ""
-    local score_sum = 0
-    local score_nval = 0
-    local eval_comp_grades_nb = #self.eval.competencies
-    local eval_mean_comp_grades = {}
-
-
-    if not next(self.grades) then
-        return nil
-    else
-        for _, grade in ipairs(self.grades) do
-            local score, comp = grade:get_score_and_comp("split")
-
-            if score then
-                score_sum = score_sum + score
-                score_nval = score_nval + 1
-            end
-            if comp then
-                competencies_sum = competencies_sum .. " " .. comp
-            end
-        end
-    end
-
-    local mean_score = score_nval > 0 and score_sum / score_nval
-    local mean_grade = Grade.new(mean_score, competencies_sum)
-
-    return mean_grade:get_score_and_mean_comp()
-end
-
---------------------------------------------------------------------------------
--- Return a mean grade.
-function Result:get_mean_grade ()
-    local competencies_sum = ""
-    local score_sum = 0
-    local score_nval = 0
-
-    if not self.grades then
-        return nil
-    else
-        for _, grade in ipairs(self.grades) do
-            local score, comp = grade:get_score_and_comp()
-            if score then
-                score_sum = score_sum + score
-                score_nval = score_nval + 1
-            end
-            if comp then
-                competencies_sum = competencies_sum .. " " .. comp
-            end
-        end
-    end
-
-    local mean_score = score_nval > 0 and score_sum / score_nval
-    local sum_grade  = Grade.new(mean_score, competencies_sum)
-    local mean_grade = sum_grade:mean_competencies()
-
-    return mean_grade:get_score_and_comp()
-end
-
---------------------------------------------------------------------------------
 -- Return the eval result attributes.
+-- @return eid
 function Result:get_eval_id ()
     return self.eval:get_id()
 end
+
+-- @return competencies, nb_competencies, comp_fw_id
 function Result:get_competencies_infos ()
     return self.eval:get_competencies_infos()
 end
--- FIXME doesn't work?
-function Result:get_score_infos ()
-    local max_score, real_max_score, over_max = self.eval:get_score_infos()
-    return self.score, max_score, real_max_score, over_max
+
+-- Returns the score informations of the result evaluation
+-- @return max_score, real_max_score, over_max
+function Result:get_eval_score_infos ()
+    return self.eval:get_score_infos()
+end
+
+-- Returns the coefficient of the result evaluation
+-- @return coefficient
+function Result:get_eval_coefficient ()
+    return self.eval:get_coefficient()
 end
 
 --------------------------------------------------------------------------------
 -- Print a summary of the evaluation result
+-- FIXME rewrite all of this
 function Result:plog (prompt_lvl)
     local prompt_lvl = prompt_lvl or 0
     local tab = "  "
@@ -364,7 +268,7 @@ function Result:plog (prompt_lvl)
     if score or self.competencies then
         utils.plog("%s%s- ",                prompt, tab)
         if score then
-            utils.plog("score: %s",         list_scores(score))
+            --utils.plog("score: %s",         list_scores(score))
             if maxscore then
                 utils.plog("/%d ",          max_score)
             end

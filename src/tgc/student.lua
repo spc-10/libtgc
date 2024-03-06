@@ -123,7 +123,7 @@ function Student:update (o)
         update_done = true
     end
     if type (o.gender) == "string"
-        and string.match(o.gender, "^[fFmM]$") then
+        and string.match(o.gender, "^[fFmMoO]$") then
         self.gender = o.gender
         update_done = true
     end
@@ -224,21 +224,39 @@ function Student:write (f)
 end
 
 --------------------------------------------------------------------------------
--- Check if the student is in a specified class (or group).
+-- Check if the student is in a specified class.
 -- @param class_p[opt=true] class pattern (default to all classes)
--- @param check_group[opt=true] also check in groups if true
 -- @return true or false
--- @fixme change the defautl pattern?
--- FIXME check_group doesn't work
-function Student:is_in_class (class_p, check_group)
+function Student:is_in_class (class_p)
     local class_p = class_p and tostring(class_p) or ".*"
-    local group = group or true
 
     if not self.class then
         return false
     elseif string.match(self.class, class_p) then
         return true
-    elseif self.group and string.match(self.group, class_p) then
+    else
+        return false
+    end
+end
+
+--------------------------------------------------------------------------------
+-- Check if the student is in a specified group.
+-- @param group_p[opt=true] group pattern (default to all groups)
+-- @return true or false
+function Student:is_in_group (group_p)
+    local group_p = group_p and tostring(group_p) or ".*"
+
+    if not self.group then
+        if not self.class then
+            return false
+        elseif string.match(self.class, group_p) then
+            return true
+        else
+            return false
+        end
+    elseif string.match(self.group, group_p) then
+        return true
+    elseif self.group and string.match(self.group, group_p) then
         return true
     else
         return false
@@ -249,7 +267,7 @@ end
 -- Get the class and group of a student.
 -- @return class, group
 function Student:get_class ()
-    return self.class, self.group
+    return self.class, self.group or self.class
 end
 
 --------------------------------------------------------------------------------
@@ -264,7 +282,7 @@ end
 --  - "all": return shorten name and lastname
 --  - "hard": return shorten name and lastname in full initials
 -- @param style[opt="no"] format style
--- @return the formated name and lastname
+-- @return name
 function Student:get_name (style, nickname)
     style = style or "no"
     local name, lastname = self.name, self.lastname
@@ -301,7 +319,7 @@ end
 
 --------------------------------------------------------------------------------
 -- Gets the students gender.
--- @return gender (female, male or other by default)
+-- @return "female" or "male" or "other" (default)
 function Student:get_gender ()
     local gender = tostring(self.gender)
 
@@ -316,7 +334,7 @@ end
 
 --------------------------------------------------------------------------------
 -- Gets the students adaptations.
--- @return gender (female, male or other by default)
+-- @return extra_time, dyslexia, dyscalculia, enlarged_font
 function Student:get_adaptations ()
     return self.extra_time, self.dyslexia, self.dyscalculia, self.enlarged_font
 end
@@ -330,7 +348,7 @@ end
 ---------------------------------------------------------------------------------
 -- Add an evaluation result in the student's corresponding list.
 -- @param o the evaluation result attributes table
-function Student:add_result (o)
+function Student:add_grade (o)
     local o = o or {}
     local e = o.eval
 
@@ -343,7 +361,7 @@ function Student:add_result (o)
     -- If a result already exists, we add the new one to the existing one if
     -- the eval allows multiple attempts.
     if r then
-        return r:add_grades(o)
+        return r:add_grade(o)
     -- Otherwise, we create the new result.
     else
         self.results[eid] = Result.new(o)
@@ -352,7 +370,50 @@ function Student:add_result (o)
 end
 
 ---------------------------------------------------------------------------------
+-- Update a grade
+-- @param o the evaluation result attributes table
+-- FIXME Doesn't work yet
+function Student:update_grade (o, date)
+    local o = o or {}
+    local e = o.eval
+
+    assert(e, "Cannot add a result with no associated evaluation to a student")
+
+    -- Get the grade index corresponding to the evaluation date
+    -- (only usefull for multiple attemps evals).
+    -- FIXME
+    -- grade_index = e:get_date_index(date, self:get_class())
+
+    -- Get the result correspond to the eval ids.
+    local eid = e:get_id()
+    local r = self.results[eid]
+
+    -- If the result exists, we try to update it.
+    if r then
+        return r:update_grade(o, date)
+    else
+        return nil
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Get the results grade list corresponding to an evaluation.
+-- @return {{score_1, comp_grades_1}, {score_2, comp_grades_2}, ...}
+function Student:get_grade_list (eid)
+    local r = self.results[eid]
+
+    if not r then
+        return nil
+    else
+        return r:get_grade_list()
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Get the results grade corresponding to an evaluation eid
+-- If multiple attempts allowed, return the last result
+-- @param eid the evaluation id
+-- @return score, comp_grades
 function Student:get_grade (eid)
     local r = self.results[eid]
 
@@ -364,50 +425,22 @@ function Student:get_grade (eid)
 end
 
 ---------------------------------------------------------------------------------
--- Get the results grade corresponding to an evaluation id and subid.
--- @param eid the evaluation id
--- @param subeid the subevaluation id
--- @return the grade score and competencies
--- TODO: Check allow_multi_attempts to return a list of grades or a unique grade?
-function Student:get_result (eid, style)
-    local r = self.results[eid]
+-- Get the list of the evaluation id of all the student results corresponding
+-- to a quarter (or all quarters if none given).
+-- WARNING: not tested and actually not used
+-- @parma quarter [opt]
+-- @return {eid_1, eid_2, ...} or nil
+function Student:get_results_eval_ids (quarter)
+    local eids = {}
 
-    if not r then
-        return nil
-    else
-        return r:get_result(style)
+    for eid, r in pairs(self.results) do
+        local eval_quarter = r:get_quarter()
+        if not quarter or eval_quarter and quarter == eval_quarter then
+            table.insert(eids, eid)
+        end
     end
-end
 
----------------------------------------------------------------------------------
--- Get the results mean grade corresponding to an evaluation id and subid.
--- @param eid the evaluation id
--- @return the grade score and competencies
--- TODO: Check allow_multi_attempts to return a list of grades or a unique grade?
-function Student:get_mean_grade (eid, style)
-    local r = self.results[eid]
-
-    if not r then
-        return nil
-    else
-        return r:get_mean_grade(style)
-    end
-end
-
----------------------------------------------------------------------------------
--- Get the results corresponding to an evaluation id and subid.
--- @param eid the evaluation id
--- @return a list of grades (score and competencies)
--- TODO: Check allow_multi_attempts to return a list of grades or a unique grade?
--- FIXME : Should be named get_grade()
-function Student:get_results (eid, style)
-    local r = self.results[eid]
-
-    if not r then
-        return nil
-    else
-        return r:get_results(style)
-    end
+    return next(eids) and eids or nil
 end
 
 --------------------------------------------------------------------------------
@@ -417,6 +450,7 @@ end
 
 ---------------------------------------------------------------------------------
 -- Prints the database informations in a human readable way.
+-- FIXME: rewrite this
 function Student:plog (prompt_lvl)
     local prompt_lvl = prompt_lvl or 0
     local tab = "  "
