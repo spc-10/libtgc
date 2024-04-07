@@ -179,17 +179,27 @@ end
 -- @fixme replace string.match by a method in student class
 function Tgc:find_students(fullname_p, class_p)
     local sids = {}
+    local classes = {}
 
-    -- Default patterns
-    -- FIXME Only consider 'class_p' or 'fullname_p' is a pattern if it
-    -- contains special char. Or maybe just for 'class_p'
+    -- Checks if class is a pattern (look for magic characters)
+    if class_p and string.match(class_p, "[%^%$%(%)%%%.%[%]%*%+%-%?]") then
+        if class_p == "*" then class_p = ".*" end
+        classes = self:get_classes_and_groups_list(class_p)
+    else
+        table.insert(classes, class_p)
+    end
+
+    -- Default name = all
     if not fullname_p or fullname_p == "*" then fullname_p = ".*" end
-    if not class_p or class_p == "*" then class_p = ".*" end
 
     for sid, s in ipairs(self.students) do
-        if string.match(string.lower(s:get_fullname()), string.lower(fullname_p))
-            and (s:is_in_class(class_p) or s:is_in_group(class_p)) then
-            table.insert(sids, sid)
+        if string.match(string.lower(s:get_fullname()), string.lower(fullname_p)) then
+            for _, class in ipairs(classes) do
+                if s:is_in_class(class) or s:is_in_group(class) then -- No need to check s:is_in_class(class)
+                    table.insert(sids, sid)
+                    break
+                end
+            end
         end
     end
 
@@ -1169,6 +1179,7 @@ end
 -- @param[opt=".*"] pattern to filter classes
 -- @return a table of the matching classes (default: all) or `nil` if no
 -- class is found
+-- TODO: factorize the 3 functions below.
 function Tgc:get_classes_list (pattern)
     pattern = tostring(pattern or ".*")
 

@@ -225,14 +225,12 @@ end
 
 --------------------------------------------------------------------------------
 -- Check if the student is in a specified class.
--- @param class_p[opt=true] class pattern (default to all classes)
+-- @param class_p[opt=true] class
 -- @return true or false
-function Student:is_in_class (class_p)
-    local class_p = class_p and tostring(class_p) or ".*"
-
-    if not self.class then
+function Student:is_in_class (class)
+    if not class or not self.class then
         return false
-    elseif string.match(self.class, class_p) then
+    elseif self.class == class then
         return true
     else
         return false
@@ -241,22 +239,12 @@ end
 
 --------------------------------------------------------------------------------
 -- Check if the student is in a specified group.
--- @param group_p[opt=true] group pattern (default to all groups)
+-- @param group_p[opt=true] group
 -- @return true or false
-function Student:is_in_group (group_p)
-    local group_p = group_p and tostring(group_p) or ".*"
-
-    if not self.group then
-        if not self.class then
-            return false
-        elseif string.match(self.class, group_p) then
-            return true
-        else
-            return false
-        end
-    elseif string.match(self.group, group_p) then
-        return true
-    elseif self.group and string.match(self.group, group_p) then
+function Student:is_in_group (group)
+    if not group or not self.group then
+        return false
+    elseif self.group == group then
         return true
     else
         return false
