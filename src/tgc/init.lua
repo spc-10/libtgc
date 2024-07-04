@@ -188,6 +188,7 @@ function Tgc:find_students(fullname_p, class_p)
     else
         table.insert(classes, class_p)
     end
+    if not classes then return end
 
     -- Default name = all
     if not fullname_p or fullname_p == "*" then fullname_p = ".*" end
@@ -1316,13 +1317,13 @@ end
 -- @param class class pattern
 -- @return the size of the class
 function Tgc:get_class_size(class)
-    local size = 0
+    local sids = self:find_students(".*", class)
 
-    for sid in self:next_student(class) do
-        size = size + 1
+    if sids then
+        return #sids
+    else
+        return 0
     end
-
-    return size
 end
 
 
