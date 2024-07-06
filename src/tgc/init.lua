@@ -425,7 +425,7 @@ function Tgc:add_student_eval_grade (sid, eid, o)
         return nil
     end
 
-    -- Add date and quarter infos for this class and evaluation.
+    -- Add date infos for this class and evaluation.
     local _, group = s:get_class()
     e:add_result_date(group, o.date)
 
@@ -1355,5 +1355,14 @@ function Tgc:plog ()
     utils.plog("%s> Number of students : %q.\n",  prompt, self:get_students_number())
     utils.plog("%s> Number of evaluations : %q.\n", prompt, self:get_evaluations_number())
 end
+
+--------------------------------------------------------------------------------
+-- Utility stuff.
+-- @section utility
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+-- Check if a date is valid.
+Tgc.is_date_valid = utils.is_date_valid
 
 return setmetatable({init = Tgc.init}, nil)

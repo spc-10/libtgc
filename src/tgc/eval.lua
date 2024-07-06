@@ -145,6 +145,8 @@ function Eval:add_result_date (class, date)
     self.dates        = self.dates or {}
     self.dates[class] = self.dates[class] or {}
 
+    assert(is_date_valid(date), "Impossible to create an evaluation with an invalid date!")
+
     local date_found  = false
     -- Checks if the date already exists
     for _, d in ipairs(self.dates[class]) do

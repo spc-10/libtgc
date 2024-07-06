@@ -70,8 +70,10 @@ end
 function _M.is_date_valid (date)
     if type(date) ~= "string" then return false end
 
-    local year, month, day = string.match(date, "(%d%d%d%d)/(%d%d)/(%d%d)")
-    if not year then return false end
+    local day, month, year = string.match(date, "(%d+)/(%d+)/(%d+)")
+    if not day then
+        return false
+    end
     if tonumber(month) < 1 or tonumber(month) > 12 then return false end
     if tonumber(day) < 1 or tonumber(day) > 31 then return false end
 
