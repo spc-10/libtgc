@@ -182,7 +182,7 @@ function Tgc:find_students(fullname_p, class_p)
     local classes = {}
 
     -- Checks if class is a pattern (look for magic characters)
-    if class_p and string.match(class_p, "[%^%$%(%)%%%.%[%]%*%+%-%?]") then
+    if not class_p or class_p and string.match(class_p, "[%^%$%(%)%%%.%[%]%*%+%-%?]") then
         if class_p == "*" then class_p = ".*" end
         classes = self:get_classes_and_groups_list(class_p)
     else
