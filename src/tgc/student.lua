@@ -72,10 +72,10 @@ function Student.new (o)
     s.gender         = o.gender
     s.class          = o.class
     s.group          = o.group
-    s.dyslexia       = o.dyslexia
-    s.dyscalculia    = o.dyscalculia
-    s.enlarged_font  = o.enlarged_font
-    s.extra_time     = o.extra_time
+    s.dyslexia       = o.dyslexia and true or nil
+    s.dyscalculia    = o.dyscalculia and true or nil
+    s.enlarged_font  = o.enlarged_font and true or nil
+    s.extra_time     = o.extra_time and true or nil
     s.place          = tonumber(o.place)
 
     -- Create the evaluation results
