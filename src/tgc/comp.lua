@@ -36,6 +36,7 @@ function Comp_fw.new (o)
     f.id                      = tonumber(o.id)
     f.title                   = o.title and tostring(o.title)
     f.altid                   = o.altid and tonumber(o.altid)
+    f.default                 = o.default and true or nil
 
     f.coefficient             = o.coefficient and tonumber(o.coefficient)
 
@@ -118,6 +119,11 @@ function Comp_fw:write (f)
     fwrite("id = %q,",                          self.id)
     fwrite("%stitle = %q,",                     space, self.title)
 
+    if self.default then
+        fwrite("\n%sdefault = %q,",               tab, self.default)
+    end
+
+    -- Alternate framework
     if self.altid then
         fwrite("\n%saltid = %q,",               tab, self.altid)
     end

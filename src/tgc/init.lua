@@ -47,6 +47,7 @@ function Tgc.init ()
     t.groups            = {}
     t.evaluations       = {}
     t.comp_fw           = {}
+    --t.default_cfwid   = nil
 
     return t
 end
@@ -855,10 +856,28 @@ function Tgc:add_compfw (o)
     -- Make sure the comp_fw has an id
     o.id = o.id or self:get_unused_compfw_id()
 
+    -- Check if this is the default comp_fw
+    if o.default then
+        self.default_cfwid = o.id
+
+        -- Remove the default tag to the other frameworks (there can be only
+        -- one).
+        for _, f in ipairs(self.comp_fw) do
+            f.default = nil
+        end
+    end
+
     local f = Comp_fw.new(o)
     self.comp_fw[o.id] = f
 
     return o.id
+end
+
+--------------------------------------------------------------------------------
+-- Get the default framework id
+-- @return cfwid
+function Tgc:get_default_cfwid ()
+    return self.default_cfwid
 end
 
 --------------------------------------------------------------------------------
