@@ -413,6 +413,21 @@ function Student:get_grade (eid)
 end
 
 ---------------------------------------------------------------------------------
+-- Get the results score corresponding to an evaluation eid
+-- If the result grades contains no score, calculates one from competencies.
+-- @param eid the evaluation id
+-- @return score
+function Student:get_score (eid)
+    local r = self.results[eid]
+
+    if not r then
+        return nil
+    else
+        return r:get_score()
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Get the list of the evaluation id of all the student results corresponding
 -- to a quarter (or all quarters if none given).
 -- WARNING: not tested and actually not used

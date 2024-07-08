@@ -199,6 +199,7 @@ end
 
 --------------------------------------------------------------------------------
 -- Return the result grades.
+-- If multiple grades, returns the last one.
 function Result:get_grade ()
     if not self.grades or not next(self.grades) then
         return nil
@@ -208,6 +209,26 @@ function Result:get_grade ()
     --local allow_multi_attempts = self:get_multi_infos()
 
     return self.grades[#self.grades]:get_score_and_comp()
+end
+
+--------------------------------------------------------------------------------
+-- Return the result score.
+-- If multiple grades, returns the last one.
+-- If the grades contains no score, calculate ones from competencies.
+function Result:get_score ()
+    if not self.grades or not next(self.grades) then
+        return nil
+    end
+
+    local g = self.grades[#self.grades]
+
+    local score, comp_grades = g:get_score_and_comp()
+
+    if score then
+        return score
+    else
+        return g:calc_mean()
+    end
 end
 
 --------------------------------------------------------------------------------

@@ -498,6 +498,17 @@ function Tgc:get_student_eval_grade (sid, eid)
 end
 
 --------------------------------------------------------------------------------
+-- Returns the student results score.
+function Tgc:get_student_eval_score (sid, eid)
+    local s = self.students[sid]
+    local e = self.evaluations[eid]
+
+    if not s or not e then return nil end
+
+    return s:get_score(eid)
+end
+
+--------------------------------------------------------------------------------
 -- Returns a list of the student attempts infos if multiple attempts are allowed.
 function Tgc:get_student_eval_attempts_infos (sid, eid)
     local s = self.students[sid]
@@ -612,6 +623,7 @@ end
 -- @param cfwid the index of the competencies framework
 -- @param quarter
 -- TODO: Allow calculation from domains *or competencies* scores
+-- TODO: switch cfwid, quarter parameters order
 function Tgc:calc_student_comp_report (sid, cfwid, quarter)
     local s = self.students[sid]
     if not s then
@@ -704,8 +716,9 @@ end
 -- corresponding competencies are converted to a score (considering the
 -- max_score given or 20 by default) and this score is considered for the
 -- report.
+-- Warning: return a score included in [0;1]
 -- @param sid the index of student
--- @param quarter [opt]  the index of student
+-- @param quarter [opt] the quarter (all quarters if nil)
 -- @param cfwid [opt] the index of the competencies framework
 -- @param comp_real_max_score [opt]
 function Tgc:calc_student_evals_report (sid, quarter, cfwid, comp_real_max_score)
@@ -763,6 +776,55 @@ function Tgc:calc_student_evals_report (sid, quarter, cfwid, comp_real_max_score
     else
         return score_sum / max_score_sum
     end
+end
+
+--------------------------------------------------------------------------------
+-- Returns the ranking of the students.
+-- The scope of the ranking is calculated depending on the parameters given:
+--  - an evaluation if `eid` is given (don't check if quarter correspond)
+--  - competencies if `cfwid` is given
+--  - all the evaluations and competencies if `cfwid` and `comp_real_max_score`
+--    given (see calc_student_evals_report())
+-- @param sids a list of students index
+-- @param quarter [opt] the quarter (all quarters if nil)
+-- @param eid [opt] the evaluation index
+-- @param cfwid [opt] the index of the competencies framework
+-- @param comp_real_max_score [opt]
+function Tgc:get_students_ranking (sids, quarter, eid, cfwid, comp_real_max_score)
+    local quarter = tonumber(quarter)
+
+    -- Nothing to calculate ranking
+    if not eid and not cfwid and not comp_real_max_score then return end
+    if not sids then return end
+
+    local ranking = {}
+
+    for _, sid in pairs(sids) do
+        local score
+
+        -- Evaluation plus competencies case
+        if cfwid and comp_real_max_score then
+            score = self:calc_student_evals_report(sid, quarter, cfwid, comp_real_max_score)
+        -- Competencies case
+        elseif cfwid then
+            local total_score, max_score = self:calc_student_comp_report(sid, cfwid, quarter)
+            if total_score then
+                score = total_score / max_score
+            end
+        -- Evaluation case
+        elseif eid then
+            score = self:get_student_eval_score(sid, eid)
+        end
+
+        if score then
+            table.insert(ranking, {sid = sid, score = score})
+        end
+    end
+
+    -- We now sort the students list by scores
+    table.sort(ranking, function(a, b) return a.score > b.score end)
+
+    return ranking
 end
 
 
