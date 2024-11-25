@@ -404,6 +404,39 @@ function Eval:get_competencies_infos ()
     end
 end
 
+-- Returns the result ids corresponding to given dates
+function Eval:get_result_ids (dates_list, class, group)
+    -- dates_list should be a date (string) array or a date (string)
+    --print("DEBUG DEBUG Eval:get_result_ids() | type(dates_list) = ", type(dates_list))
+    dates_list = dates_list or {}
+    if type(dates_list) == "string" then
+        dates_list = {dates_list}
+    elseif type(dates_list) ~= "table" then
+        return
+    end
+    --print("DEBUG DEBUG Eval:get_result_ids() | type(dates_list) = ", type(dates_list))
+    --print("DEBUG DEBUG Eval:get_result_ids() | self.dates = ", self.dates)
+
+    local rids = {}
+    local result_dates = self.dates[group] or self.dates[class] or {}
+    --print("DEBUG DEBUG Eval:get_result_ids() | result_dates = ", result_dates)
+    --print("DEBUG DEBUG Eval:get_result_ids() | result_dates[1] = ", result_dates[1])
+
+    for _, date in ipairs(dates_list) do
+        assert(is_date_valid(date), "Impossible to get a result with an invalid date!")
+        --print("DEBUG DEBUG Eval:get_result_ids() | date = ", date)
+        for rid, result_date in ipairs(result_dates) do
+            --print("DEBUG Eval:get_result_ids() | date, result_date = ", date, result_date)
+            if date == result_date then
+                table.insert(rids, rid)
+            end
+        end
+    end
+
+    --print("DEBUG DEBUG Eval:get_result_ids() | rids = ", table.concat(rids, ", "))
+    return rids
+end
+
 -- Is the eval optional?
 function Eval:is_optional ()
     return self.optional and true or false

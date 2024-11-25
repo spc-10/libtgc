@@ -89,7 +89,8 @@ function Student.new (o)
                 break
                 -- return nil -- TODO error msg/assert
             end
-            result.eval = e
+            result.eval    = e
+            result.student = s
             s.results[eid] = Result.new(result)
         end
     end
@@ -402,13 +403,13 @@ end
 -- If multiple attempts allowed, return the last result
 -- @param eid the evaluation id
 -- @return score, comp_grades
-function Student:get_grade (eid)
+function Student:get_grade (eid, date)
     local r = self.results[eid]
 
     if not r then
         return nil
     else
-        return r:get_grade()
+        return r:get_grade(date)
     end
 end
 

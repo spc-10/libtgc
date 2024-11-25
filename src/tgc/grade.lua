@@ -363,7 +363,7 @@ end
 
 --------------------------------------------------------------------------------
 -- Mean a competencies string
--- Exemple : "1A 1B 7C 7D 4B" becomes "1AB 7CD 4B"
+-- Exemple : "1A 1B 7C 7D 4B" becomes "1B 7C 4B"
 --
 -- @param comp_string (string)
 -- @return (string)

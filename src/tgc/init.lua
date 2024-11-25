@@ -484,18 +484,18 @@ function Tgc:get_student_eval_grade_list (sid, eid)
 
     if not s or not e then return nil end
 
-    return s:get_grade_list(eid, nil)
+    return s:get_grade_list(eid)
 end
 
 --------------------------------------------------------------------------------
 -- Returns the student results grades.
-function Tgc:get_student_eval_grade (sid, eid)
+function Tgc:get_student_eval_grade (sid, eid, date)
     local s = self.students[sid]
     local e = self.evaluations[eid]
 
     if not s or not e then return nil end
 
-    return s:get_grade(eid)
+    return s:get_grade(eid, date)
 end
 
 --------------------------------------------------------------------------------

@@ -99,6 +99,7 @@ function Result.new (o)
 
     -- Assign attributes
     r.eval                    = o.eval
+    r.student                 = o.student
     -- Grades can be a single object or a table of grades
     -- TODO: handle errors?
     r.grades                  = create_grade(o.grades, o.eval.competencies)
@@ -199,16 +200,33 @@ end
 
 --------------------------------------------------------------------------------
 -- Return the result grades.
--- If multiple grades, returns the last one.
-function Result:get_grade ()
+-- If multiple grades, returns the one corresponding to the date or returns
+-- the last one if no date.
+-- @param date[opt]
+function Result:get_grade (date)
+    --print("DEBUG Result:get_grade (date) | date = ", date)
     if not self.grades or not next(self.grades) then
         return nil
     end
 
-    -- TODO handle multiple attempts
-    --local allow_multi_attempts = self:get_multi_infos()
+    if not date then
+        --print("DEBUG Result:get_grade (date) | return = ", self.grades[#self.grades]:get_score_and_comp())
+        return self.grades[#self.grades]:get_score_and_comp()
+    end
 
-    return self.grades[#self.grades]:get_score_and_comp()
+    -- Find the grade corresponding to the date
+    assert(is_date_valid(date), "Impossible to get a grade corresponding to an invalid date!")
+    local class, group = self.student:get_class()
+    local gid = table.unpack(self.eval:get_result_ids(date, class, group)) -- FIXME
+    --print("DEBUG Result:get_grade (date) | gid = ", gid)
+
+    --print("DEBUG Result:get_grade (date) | self.grades[gid] = ", self.grades[gid])
+    if tonumber(gid) then
+        --print("DEBUG Result:get_grade (date) | self.grades[gid]:get_score_and_comp() = ", self.grades[gid]:get_score_and_comp())
+        return self.grades[gid]:get_score_and_comp()
+    else
+        return nil
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -243,6 +261,12 @@ end
 -- @return eid
 function Result:get_eval_id ()
     return self.eval:get_id()
+end
+
+-- Returns infos about multiple attempts
+-- @return allow_multi_attempts, success_score_pc
+function Result:get_multi_infos ()
+    return self.eval:get_multi_infos()
 end
 
 -- @return competencies, nb_competencies, comp_fw_id
