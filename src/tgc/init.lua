@@ -372,6 +372,11 @@ function Tgc.comp_mean(comp_string)
     return Grade.comp_mean(comp_string)
 end
 
+-- Mean a competencies string list
+function Tgc.comp_list_mean(comp_list, comp_ids_mask)
+    return Grade.comp_list_mean(comp_list, comp_ids_mask)
+end
+
 -- Switch from a competencies framework to another
 function Tgc.comp_switch(comp_string, hashtable)
     return Grade.comp_switch(comp_string, hashtable)
@@ -559,14 +564,14 @@ function Tgc:calc_eval_mean_grade (eid, sids)
     local e = self.evaluations[eid]
 
     if not e then return nil end
-    local eval_comp, eval_comp_nb = e:get_competencies_infos()
+    local eval_comp = e:get_competencies_infos()
 
     sids = sids or self:find_students()
     if not sids or not next(sids) then return nil end
 
     -- Calculates the score and comp sum
     local score_sum, score_nval, score_mean = 0, 0, 0
-    local tmp_comp_sum = {}
+    local comp_list = {}
     for _, sid in ipairs(sids) do
         local s = self.students[sid]
         local score, competencies = s:get_grade(eid)
@@ -575,18 +580,7 @@ function Tgc:calc_eval_mean_grade (eid, sids)
             score_nval = score_nval + 1
         end
         if competencies then
-            for i = 1, eval_comp_nb do
-                tmp_comp_sum[i] = tmp_comp_sum[i] or ""
-                local prev_comp_grades = string.rep("%d+[ABCDabcd-]%s*", i - 1)
-                local comp_id, comp_letter = string.match(competencies, prev_comp_grades .. "(%d+)([ABCDabcd-])")
-
-                -- Only count grades corresponding to eval comps mask
-                -- TODO: warning message?
-                local eval_comp_id = eval_comp[i]
-                if comp_id and eval_comp_id == comp_id then
-                    tmp_comp_sum[i] = tmp_comp_sum[i] .. " " .. comp_id .. comp_letter
-                end
-            end
+            table.insert(comp_list, competencies)
         end
     end
 
@@ -598,17 +592,7 @@ function Tgc:calc_eval_mean_grade (eid, sids)
     end
 
     -- Calculate the mean competencies
-    local competencies_mean
-    if tmp_comp_sum and next(tmp_comp_sum) then
-        competencies_mean = ""
-        for i = 1, eval_comp_nb do
-            if tmp_comp_sum[i] then
-                competencies_mean = competencies_mean .. " " .. self.comp_mean(tmp_comp_sum[i])
-            end
-        end
-        -- Remove startinging spaces
-        competencies_mean = string.gsub(competencies_mean, "^%s*", "")
-    end
+    local competencies_mean = self.comp_list_mean(comp_list, eval_comp)
 
     return score_mean, competencies_mean
 end
@@ -632,7 +616,7 @@ function Tgc:calc_student_comp_report (sid, cfwid, quarter)
     end
 
     -- first get all the competencies grades
-    local comp_grades_sum
+    local comp_string_all
     for _, r in pairs(s.results) do
         -- if no quarter specified, get all the results
         if not quarter or r:get_quarter() == tonumber(quarter) then
@@ -643,72 +627,108 @@ function Tgc:calc_student_comp_report (sid, cfwid, quarter)
             if eval_cfwid == cfwid then
                 local _, comp_grade = s:get_grade(eid)
                 if comp_grade then
-                    comp_grades_sum = comp_grades_sum or ""
-                    comp_grades_sum = comp_grades_sum .. " " .. comp_grade
+                    comp_string_all = (comp_string_all or "") .. " " .. comp_grade
                 end
             end
         end
     end
 
-    if not comp_grades_sum then return nil end
+    if not comp_string_all then return nil end
+    --print("DEBUG comp_string_all = ", comp_string_all)
 
     -- Competencies framework infos
     local comp_fw = self.comp_fw[cfwid]
     local domain_hashtable = comp_fw:get_domain_hashtable()
-    local domain_comp_grades = self.comp_switch(comp_grades_sum, domain_hashtable)
+    local domain_comp_string_all = self.comp_switch(comp_string_all, domain_hashtable)
+    --print("DEBUG domain_comp_string_all = ", domain_comp_string_all)
 
     -- Now we calculate a score for each domain competencies
-    local comp_grade_score_sum = {}
-    local comp_grade_nval = {}
-    for comp_id, comp_letter in string.gmatch(domain_comp_grades, "(%d+)([ABCDabcd-])") do
-        local score, nval
+    -- n = 1 Calculates the mean score without optional grades
+    -- n = 2 Calculates the mean score with optional grades > mean w/o opt
+    -- n = 3 Calculates the mean score with optional grades > mean w opt
+    local total_score, max_score
+    local mean_wo_opt, mean_w_opt = {}, {}
+    local domain_comp_score       = {}
+    local n = 1
+    repeat
+        local sum, nval = {}, {}
+        for comp_id, comp_letter in string.gmatch(domain_comp_string_all, "(%d+)([ABCDabcd-]%**)") do
+            local score
 
-        local id = tonumber(comp_id)
-        comp_grade_score_sum[id] = comp_grade_score_sum[id] or 0
-        comp_grade_nval[id]      = comp_grade_nval[id] or 0
+            local id = tonumber(comp_id)
 
-        local score = Grade.comp_letter_to_score(comp_letter)
-        local keep_best = comp_fw:get_domain_score_opt(id)
-        if score then
-            -- TODO handle options
-            if keep_best then
-                if score > comp_grade_score_sum[id] then
-                    comp_grade_score_sum[id] = score
-                    comp_grade_nval[id] = 1
+            if n == 1 then -- No optional (starred) grades
+                if not string.match(comp_letter, "%*") then
+                    score = Grade.comp_letter_to_score(comp_letter)
+                else
                 end
-            else
-                comp_grade_score_sum[id] = comp_grade_score_sum[id] + score
-                comp_grade_nval[id] = comp_grade_nval[id] + 1
+            elseif n == 2 then -- Only optional grades > mean w/o opt
+                score = Grade.comp_letter_to_score(comp_letter)
+                if string.match(comp_letter, "%*") then
+                    if mean_wo_opt[id] and score and score < mean_wo_opt[id] then
+                        score = nil -- remove optional score that lower the mean
+                    end
+                end
+            else -- Only optional grades > mean w/ opt
+                score = Grade.comp_letter_to_score(comp_letter)
+                if string.match(comp_letter, "%*") then
+                    if mean_w_opt[id] and score and score < mean_w_opt[id] then
+                        score = nil -- remove optional score that lower the mean
+                    end
+                end
+            end
+
+            if score then
+                -- TODO better handle options
+                local keep_best = comp_fw:get_domain_score_opt(id)
+                if keep_best then
+                    if score > (sum[id] or 0) then
+                        sum[id]  = score
+                        nval[id] = 1
+                    end
+                else
+                    sum[id]  = (sum[id]  or 0) + score
+                    nval[id] = (nval[id] or 0) + 1
+                end
+            end
+
+        end
+
+        -- Adapt the score to domains options
+        total_score, max_score = 0, 0
+        for id = 1, comp_fw:get_domain_nb() do
+            local mean_score
+            local domain_score = comp_fw:get_domain_score(id)
+            local _, mandatory = comp_fw:get_domain_score_opt(id)
+
+            -- Only consider scoring domains
+            if domain_score then
+                if nval[id] and nval[id] > 0 and sum[id] then
+                    mean_score  = sum[id] / nval[id]
+                    total_score = total_score  + domain_score * mean_score
+                    max_score   = max_score    + domain_score
+                -- Only count null score if the domain is mandatory
+                elseif mandatory then
+                    mean_score = 0
+                    max_score = max_score + domain_score
+                end
+
+                if mean_score and n == 3 then
+                    domain_comp_score[id] = domain_score * mean_score
+                end
+            end
+
+            if n == 1 then
+                mean_wo_opt[id] = mean_score
+            elseif n == 2 then
+                mean_w_opt[id]  = mean_score
             end
         end
-    end
-
-    -- Adapt the score to domains options
-    local comp_grade_scores = {}
-    local total_score, max_score = 0, 0
-    for id = 1, comp_fw:get_domain_nb() do
-        local domain_score = comp_fw:get_domain_score(id)
-        local _, mandatory = comp_fw:get_domain_score_opt(id)
-
-        -- Only consider scoring domains
-        if domain_score then
-            local score_sum  = comp_grade_score_sum[id]
-            local grade_nval = comp_grade_nval[id]
-
-            if grade_nval and grade_nval > 0 and score_sum then
-                comp_grade_scores[id] = domain_score * score_sum / grade_nval
-                total_score = total_score + comp_grade_scores[id]
-                max_score   = max_score + domain_score
-            -- Only count null score if the domain is mandatory
-            elseif mandatory then
-                comp_grade_scores[id] = 0
-                max_score = max_score + domain_score
-            end
-        end
-    end
+        n = n + 1
+    until n > 3
 
     -- return the score and the detail table
-    return total_score, max_score, comp_grades_sum, comp_grade_scores
+    return total_score, max_score, comp_string_all, domain_comp_score
 end
 
 --------------------------------------------------------------------------------

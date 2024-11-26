@@ -20,7 +20,7 @@ local is_date_valid, is_quarter_valid = utils.is_date_valid, utils.is_quarter_va
 --------------------------------------------------------------------------------
 -- Creates a grade or a list of grades.
 -- @param val (number or string or table) @see Grade class
--- @param val (table of number or string or table) will be a table of Grades
+-- @param eval_comp (table of number or string or table) will be a table of Grades
 -- @return Grade or a table of Grades
 local function create_grade (val, eval_comp)
     local grades = {}

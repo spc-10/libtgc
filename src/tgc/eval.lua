@@ -108,7 +108,7 @@ function Eval.new (o)
 
     if o.competencies and type(o.competencies == "string") then
         e.competencies        = {}
-        string.gsub(o.competencies, "%s*(%d+)%s*", function(c) table.insert(e.competencies, c) end)
+        string.gsub(o.competencies, "%s*(%d+%**)%s*", function(c) table.insert(e.competencies, c) end)
     end
     e.comp_fw_id              = o.comp_fw_id -- FIXME checks
 

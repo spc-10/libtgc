@@ -17,6 +17,16 @@
 ]]--
 
 
+--------------------------------------------------------------------------------
+-- TODO Naming scheme
+-- score: a numeric value (ex: 12.5)
+-- comp_grades: a table of comp_grade (ex: {"1A", "3-", "12D*"})
+-- comp_grade: a string formed by a comp_id and a comp_letter and optionally a star (ex: "12D*")
+-- comp_id: a number (ex: 12)
+-- comp_letter: a string. Can be "A", "B", "C", "D" or "-" and can be followed by an optional star "*"
+-- comp_string: a concatenated string of comp_grade (ex: "1A 3-BC 12D*CC")
+--
+-- FIXME Check if the syntax is respected…
 
 --------------------------------------------------------------------------------
 -- A grade is a couple of:
@@ -57,7 +67,7 @@ local function create_comp_grades (comp_letters, comp_ids_mask)
     --print("DEBUG : create_comp_grades()")
     -- split the competencies
     repeat -- split the competencies
-        comp_letters, n = string.gsub(comp_letters, "(%d+)([ABCDabcd-])([ABCDabcd-])", "%1%2 %1%3")
+        comp_letters, n = string.gsub(comp_letters, "(%d+)([ABCDabcd-]%**)([ABCDabcd-]%**)", "%1%2 %1%3")
     until n == 0
     --print("DEBUG : comp_letters = ", comp_letters)
     --print("DEBUG : comp_ids_mask = ", comp_ids_mask)
@@ -78,41 +88,68 @@ local function create_comp_grades (comp_letters, comp_ids_mask)
         for _, id in ipairs(comp_ids_mask) do
             table.insert(ids_list, id)
         end
-        for letter in string.gmatch(comp_letters, "[ABCDabcd-]") do
+        for letter in string.gmatch(comp_letters, "[ABCDabcd-]%**") do
             table.insert(comp_letters_list, letter)
         end
 
         -- Associate
         for i, id in ipairs(ids_list) do
+            -- Check if the comp grade is optional
+            local optional = ""
+            if string.match(id, "%*") then
+                optional = "*"
+                id = string.gsub(id, "%**", "")
+            end
+
             if comp_letters_list[i] then
-                table.insert(comp_grades, id .. string.upper(comp_letters_list[i]))
+                -- Check if the comp grade is optional
+                if string.match(comp_letters_list[i], "%*") then
+                    optional = "*"
+                    comp_letters_list[i] = string.gsub(comp_letters_list[i], "%**", "")
+                end
+
+                table.insert(comp_grades, id .. string.upper(comp_letters_list[i]) .. optional)
             else
-                table.insert(comp_grades, id .. "-")
+                table.insert(comp_grades, id .. "-" .. optional)
             end
         end
     -- Comp letters are already associated with ids and no ids model given.
     elseif string.match(comp_letters, "%d+") and not comp_ids_mask then
-         --print("DEBUG ----------- 3 --------")
-        for id, letters in string.gmatch(comp_letters, "(%d+)([ABCDabcd-]+)") do
-            for letter in string.gmatch(letters, ".") do
+        -- print("DEBUG ----------- 3 --------")
+        for id, letters in string.gmatch(comp_letters, "(%d+)([ABCDabcd%*-]+)") do
+            for letter in string.gmatch(letters, "[ABCDabcd-]%**") do
+                letter = string.gsub(letter, "%*%**", "*")
                 table.insert(comp_grades, id .. letter:upper())
             end
         end
     -- Comp letters are already associated with ids and ids model given.
     -- We must check the correspondance.
     elseif string.match(comp_letters, "%d+") and comp_ids_mask then
-         --print("DEBUG ----------- 4 --------")
+        -- print("DEBUG ----------- 4 --------")
         local ids_list = {}
         local i = 1
 
         for _, id in ipairs(comp_ids_mask) do
+            local optional = ""
+            if string.match(id, "%*") then
+                optional = "*"
+                id = string.gsub(id, "%**", "")
+            end
+
              --print("DEBUG : id = ", id)
-            local letter = string.match(comp_letters, "%D*" ..id .. "([ABCDabcd-])")
+            local letter = string.match(comp_letters, "%D*" ..id .. "([ABCDabcd-]%**)")
              --print("DEBUG : letter = ", letter)
             if letter then
-                table.insert(comp_grades, id .. letter:upper())
+                if string.match(letter, "%*") then
+                    optional = "*"
+                    letter = string.gsub(letter, "%**", "")
+                end
+
+                table.insert(comp_grades, id .. letter:upper() .. optional)
                 -- Remove matching comp
-                comp_letters = string.gsub(comp_letters, "%s*" .. id .. "[ABCDabcd-]%s*", " ", 1)
+                comp_letters = string.gsub(comp_letters, "%s*" .. id .. "[ABCDabcd-]%**%s*", " ", 1)
+            else
+                table.insert(comp_grades, id .. "-" .. optional)
             end
              --print("DEBUG : comp_letters = ", comp_letters)
         end
@@ -226,7 +263,7 @@ function Grade:get_merged_competencies ()
     local tmp_comp_grades = {}
 
     for _, comp_grade in ipairs(self.comp_grades) do
-        id, letter = string.match(comp_grade, "(%d+)([ABCD-])")
+        id, letter = string.match(comp_grade, "(%d+)([ABCD-]%**)")
         i = tonumber(id)
         if not tmp_comp_grades[i] then
             tmp_comp_grades[i] = letter
@@ -256,17 +293,20 @@ end
 -- @return score (number)
 --------------------------------------------------------------------------------
 local function comp_letter_to_score (letter)
-        if letter == "A" then
-            return 1
-        elseif letter == "B" then
-            return 0.66
-        elseif letter == "C" then
-            return 0.33
-        elseif letter == "D" then
-            return 0
-        else -- letter == "-"
-            return nil
-        end
+    -- remove optional stars
+    letter = string.gsub(letter, "%**", "")
+
+    if letter == "A" then
+        return 1
+    elseif letter == "B" then
+        return 0.66
+    elseif letter == "C" then
+        return 0.33
+    elseif letter == "D" then
+        return 0
+    else -- letter == "-"
+        return nil
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -277,16 +317,20 @@ function Grade:calc_mean ()
     end
 
     -- Calculates competencies scores
-    local comp_grades_score = {}
-    local comp_grades_nval  = {}
+    local comp_grades_score    = {}
+    local comp_grades_nval     = {}
+    local comp_grades_optional = {}
     for _, comp_grade in pairs(self.comp_grades) do
         --print("DEBUG : letter_grades = ", comp_grade)
         local score, nval
 
-        id, letter = string.match(comp_grade, "(%d+)([ABCD-])")
+        id, letter = string.match(comp_grade, "(%d+)([ABCD-]%**)")
         local i = tonumber(id)
-        comp_grades_score[i]  = comp_grades_score[i] or 0
-        comp_grades_nval[i] = comp_grades_nval[i] or 0
+        comp_grades_score[i]    = comp_grades_score[i] or 0
+        comp_grades_nval[i]     = comp_grades_nval[i] or 0
+        if not string.match(letter, "%*") then
+            comp_grades_optional[i] = ""
+        end
 
         local score = comp_letter_to_score(letter)
         if score then
@@ -321,7 +365,8 @@ function Grade:calc_mean ()
 
     local mean_comp_grades = {}
     for _, id in ipairs(sorted_comp_ids) do
-        table.insert(mean_comp_grades, id .. tmp_comp_grades[id])
+        comp_grades_optional[id] = comp_grades_optional[id] or "*"
+        table.insert(mean_comp_grades, id .. tmp_comp_grades[id] .. comp_grades_optional[id])
     end
 
     return self.score, table.concat(mean_comp_grades, " ")
@@ -380,6 +425,67 @@ local function comp_mean (comp_string)
 end
 
 --------------------------------------------------------------------------------
+-- Mean a competencies string list according to a mask
+-- Exemple : TODO
+--
+-- @param comp_list (table)
+-- @param comp_ids_mask (table)
+-- @return (string)
+--------------------------------------------------------------------------------
+local function comp_list_mean (comp_list, comp_ids_mask)
+    if not comp_list then
+        return nil
+    end
+
+    -- if no mask, return the all mean
+    if not comp_ids_mask then
+        return comp_mean(table.concat(comp_list, " "))
+    end
+
+    local tmp_comp_sums = {}
+    for _, comp_letters in ipairs(comp_list) do
+        for i, id in ipairs(comp_ids_mask) do
+            tmp_comp_sums[i] = tmp_comp_sums[i] or ""
+
+            -- Check if grade is optional
+            local optional = ""
+            if string.match(id, "%*") then
+                optional = "*"
+                id = string.gsub(id, "%**", "")
+            end
+
+            local letter = string.match(comp_letters, "%D*" ..id .. "([ABCDabcd-]%**)")
+            if letter then
+                if string.match(letter, "%*") then
+                    optional = "*"
+                    letter = string.gsub(letter, "%**", "")
+                end
+
+                tmp_comp_sums[i] = tmp_comp_sums[i] .. letter:upper() .. optional
+                -- Remove matching comp
+                comp_letters = string.gsub(comp_letters, "%s*" .. id .. "[ABCDabcd-]%**%s*", " ", 1)
+            else
+                tmp_comp_sums[i] = tmp_comp_sums[i] .. "-" .. optional
+            end
+        end
+    end
+
+    local comp_sums = {}
+    local comp_list_mean = ""
+    for i, id in ipairs(comp_ids_mask) do
+        if tmp_comp_sums[i] then
+            comp_sums[i] = comp_mean(id .. tmp_comp_sums[i])
+        else
+            comp_sums[i] = id .. "-"
+        end
+
+        comp_list_mean = comp_list_mean .. comp_sums[i]
+    end
+
+    return comp_list_mean
+end
+
+--------------------------------------------------------------------------------
 -- Switch from a competencies framework to another
 -- Exemple : "1A 1B 7C 7D 4B" becomes "42A 42B 67C 67D 42B"
 --
@@ -421,7 +527,8 @@ end
 
 return setmetatable({new = Grade.new,
     comp_letter_to_score = comp_letter_to_score,
-    comp_split  = comp_split,
-    comp_merge  = comp_merge,
-    comp_mean   = comp_mean,
-    comp_switch = comp_switch}, nil)
+    comp_split     = comp_split,
+    comp_merge     = comp_merge,
+    comp_mean      = comp_mean,
+    comp_list_mean = comp_list_mean,
+    comp_switch    = comp_switch}, nil)
