@@ -138,19 +138,19 @@ function Student:update (o)
         self.group = o.group
         update_done = true
     end
-    if o.extra_time then
+    if o.extra_time ~= nil then
         self.extra_time = o.extra_time and true or nil
         update_done = true
     end
-    if o.dyslexia then
+    if o.dyslexia ~= nil then
         self.dyslexia = o.dyslexia and true or nil
         update_done = true
     end
-    if o.dyscalculia then
+    if o.dyscalculia ~= nil then
         self.dyscalculia = o.dyscalculia and true or nil
         update_done = true
     end
-    if o.enlarged_font then
+    if o.enlarged_font ~= nil then
         self.enlarged_font = o.enlarged_font and true or nil
         update_done = true
     end
