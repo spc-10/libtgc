@@ -736,6 +736,64 @@ function Tgc:calc_student_comp_report (sid, cfwid, quarter)
 end
 
 --------------------------------------------------------------------------------
+-- Get the competencies grades of a students list.
+-- @param sids the list of the student indexes
+-- @param cfwid the index of the competencies framework
+-- @param quarter
+function Tgc:calc_students_comp_report (sids, cfwid, quarter)
+    if not sids then
+        return nil
+    end
+
+    local class_score, class_comp_grades
+    local class_dom_comp_sums, class_dom_comp_nval = {}, {}
+    local domain_nb = self:get_compfw_domain_nb(cfwid)
+
+    -- get results from each student
+    for _, sid in ipairs(sids) do
+        local score, max_score, comp_grades, dom_comp_scores =
+            self:calc_student_comp_report(sid, cfwid, quarter)
+
+        if score and max_score then
+            class_score = (class_score or 0) + score / max_score
+            class_score_nval = (class_score_nval or 0) + 1
+        end
+
+        if comp_grades then
+            class_comp_grades = (class_comp_grades or "") .. comp_grades
+        end
+
+        for domain = 1, domain_nb do
+            dom_comp_scores = dom_comp_scores or {}
+
+            -- Calculate mean
+            if dom_comp_scores[domain] then
+                class_dom_comp_sums[domain] = (class_dom_comp_sums[domain] or 0) + dom_comp_scores[domain]
+                class_dom_comp_nval[domain] = (class_dom_comp_nval[domain] or 0) + 1
+            end
+        end
+
+    end
+
+    -- calculate the mean results for the student list
+    local score
+    if class_score and class_score_nval then
+        score = class_score / class_score_nval
+    end
+    local comp_scores = {}
+    for domain = 1, domain_nb do
+        if class_dom_comp_sums[domain] and class_dom_comp_nval[domain] then
+            comp_scores[domain] = class_dom_comp_sums[domain] / class_dom_comp_nval[domain]
+        end
+    end
+    local comp_means = self.comp_mean(class_comp_grades) or ""
+
+
+    -- return the score and the detail table
+    return score, comp_means, comp_scores
+end
+
+--------------------------------------------------------------------------------
 -- Returns the report of all the student grade for a particular quarter (or for
 -- all quarter if none is given). If a competencies framework id is given, the
 -- corresponding competencies are converted to a score (considering the
