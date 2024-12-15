@@ -151,12 +151,7 @@ function Tgc:add_student (o)
     end
 
     -- Same for groups
-    -- If no group, then consider the class is the group
-    if not o.group and o.class then
-        if not self:group_exists(o.class) then
-            table.insert(self.groups, o.class)
-        end
-    elseif not self:group_exists(o.group) then
+    if not self:group_exists(o.group) then
         table.insert(self.groups, o.group)
     end
 end
@@ -1328,7 +1323,7 @@ function Tgc:get_groups_list (pattern)
 end
 
 --------------------------------------------------------------------------------
--- Returns the list of the  classes groups in the database.
+-- Returns the list of the classes groups in the database.
 -- The list is not sorted.
 -- @param[opt=".*"] pattern to filter classes and groups
 -- @return a table of the matching classes and groups (default: all) or `nil`
