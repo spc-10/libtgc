@@ -647,13 +647,14 @@ function Tgc:calc_student_comp_report (sid, cfwid, quarter)
     local total_score, max_score
     local mean_wo_opt, mean_w_opt = {}, {}
     local domain_comp_score       = {}
+    local removed_comp
     local n = 1
     repeat
         local sum, nval = {}, {}
-        for comp_id, comp_letter in string.gmatch(domain_comp_string_all, "(%d+)([ABCDabcd-]%**)") do
+        for comp_id, comp_letter in string.gmatch(comp_string_all, "(%d+)([ABCDabcd-]%**)") do
             local score
 
-            local id = tonumber(comp_id)
+            local id = comp_fw:get_compid_domid(tonumber(comp_id))
 
             if n == 1 then -- No optional (starred) grades
                 if not string.match(comp_letter, "%*") then
@@ -672,6 +673,11 @@ function Tgc:calc_student_comp_report (sid, cfwid, quarter)
                 if string.match(comp_letter, "%*") then
                     if mean_w_opt[id] and score and score < mean_w_opt[id] then
                         score = nil -- remove optional score that lower the mean
+                        if not removed_comp then
+                            removed_comp = comp_id .. comp_letter
+                        else
+                            removed_comp = removed_comp .. " " .. comp_id .. comp_letter
+                        end
                     end
                 end
             end
@@ -726,7 +732,7 @@ function Tgc:calc_student_comp_report (sid, cfwid, quarter)
     until n > 3
 
     -- return the score and the detail table
-    return total_score, max_score, comp_string_all, domain_comp_score
+    return total_score, max_score, comp_string_all, domain_comp_score, removed_comp
 end
 
 --------------------------------------------------------------------------------

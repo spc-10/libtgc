@@ -118,8 +118,8 @@ local function create_comp_grades (comp_letters, comp_ids_mask)
         -- print("DEBUG ----------- 3 --------")
         for id, letters in string.gmatch(comp_letters, "(%d+)([ABCDabcd%*-]+)") do
             for letter in string.gmatch(letters, "[ABCDabcd-]%**") do
-                letter = string.gsub(letter, "%*%**", "*")
-                table.insert(comp_grades, id .. letter:upper())
+                local l = string.gsub(letter, "%*%**", "*")
+                table.insert(comp_grades, id .. l:upper())
             end
         end
     -- Comp letters are already associated with ids and ids model given.
@@ -317,56 +317,86 @@ function Grade:calc_mean ()
     end
 
     -- Calculates competencies scores
-    local comp_grades_score    = {}
-    local comp_grades_nval     = {}
-    local comp_grades_optional = {}
-    for _, comp_grade in pairs(self.comp_grades) do
-        --print("DEBUG : letter_grades = ", comp_grade)
-        local score, nval
+    local mean_wo_opt, mean_w_opt = {}, {}
+    local unsorted_mean_comp_grades = {}
+    local n = 1
+    repeat
+        local sum, nval = {}, {}
+        for _, comp_grade in pairs(self.comp_grades) do
+            --print("DEBUG : letter_grades = ", comp_grade)
+            local score
 
-        id, letter = string.match(comp_grade, "(%d+)([ABCD-]%**)")
-        local i = tonumber(id)
-        comp_grades_score[i]    = comp_grades_score[i] or 0
-        comp_grades_nval[i]     = comp_grades_nval[i] or 0
-        if not string.match(letter, "%*") then
-            comp_grades_optional[i] = ""
+            local comp_id, comp_letter = string.match(comp_grade, "(%d+)([ABCD-]%**)")
+            local id = tonumber(comp_id)
+
+            if n == 1 then -- No optional (starred) grades
+                if not string.match(comp_letter, "%*") then
+                    score = comp_letter_to_score(comp_letter)
+                else
+                end
+            elseif n == 2 then -- Only optional grades > mean w/o opt
+                score = comp_letter_to_score(comp_letter)
+                if string.match(comp_letter, "%*") then
+                    if mean_wo_opt[id] and score and score < mean_wo_opt[id] then
+                        score = nil -- remove optional score that lower the mean
+                    end
+                end
+            else -- Only optional grades > mean w/ opt
+                score = comp_letter_to_score(comp_letter)
+                if string.match(comp_letter, "%*") then
+                    if mean_w_opt[id] and score and score < mean_w_opt[id] then
+                        score = nil -- remove optional score that lower the mean
+                    end
+                end
+            end
+
+            if score then
+                sum[id]  = (sum[id]  or 0) + score
+                nval[id] = (nval[id] or 0) + 1
+            end
         end
 
-        local score = comp_letter_to_score(letter)
-        if score then
-            comp_grades_score[i] = comp_grades_score[i] + score
-            comp_grades_nval[i]  = comp_grades_nval[i] + 1
-        end
-    end
+        -- Adapt the score to domains options
+        total_score = 0
+        for id, sum in pairs(sum) do
+            local mean_score
+            if nval[id] then
+                mean_score = sum / nval[id]
+            end
 
-    -- Converts scores to letters
-    local tmp_comp_grades = {}
-    for id, score_sum in pairs(comp_grades_score) do
-        local mean_comp_score = score_sum / comp_grades_nval[id]
-        if comp_grades_nval[id] == 0 then
-            tmp_comp_grades[id] = "-"
-        elseif mean_comp_score > 0.85 then
-            tmp_comp_grades[id] = "A"
-        elseif mean_comp_score > 0.6 then
-            tmp_comp_grades[id] = "B"
-        elseif mean_comp_score > 0.3 then
-            tmp_comp_grades[id] = "C"
-        else
-            tmp_comp_grades[id] = "D"
+            if mean_score and n == 3 then
+                if nval[id] == 0 then
+                    unsorted_mean_comp_grades[id] = "-"
+                elseif mean_score > 0.85 then
+                    unsorted_mean_comp_grades[id] = "A"
+                elseif mean_score > 0.6 then
+                    unsorted_mean_comp_grades[id] = "B"
+                elseif mean_score > 0.3 then
+                    unsorted_mean_comp_grades[id] = "C"
+                else
+                    unsorted_mean_comp_grades[id] = "D"
+                end
+            end
+
+            if n == 1 then
+                mean_wo_opt[id] = mean_score
+            elseif n == 2 then
+                mean_w_opt[id]  = mean_score
+            end
         end
-    end
+        n = n + 1
+    until n > 3
 
     -- We then sort the index
     local sorted_comp_ids = {}
-    for id, _ in pairs(tmp_comp_grades) do
+    for id, _ in pairs(unsorted_mean_comp_grades) do
         table.insert(sorted_comp_ids, id)
     end
     table.sort(sorted_comp_ids)
 
     local mean_comp_grades = {}
     for _, id in ipairs(sorted_comp_ids) do
-        comp_grades_optional[id] = comp_grades_optional[id] or "*"
-        table.insert(mean_comp_grades, id .. tmp_comp_grades[id] .. comp_grades_optional[id])
+        table.insert(mean_comp_grades, id .. unsorted_mean_comp_grades[id])
     end
 
     return self.score, table.concat(mean_comp_grades, " ")

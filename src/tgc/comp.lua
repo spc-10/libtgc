@@ -215,6 +215,18 @@ function Comp_fw:get_altid ()
 end
 
 --------------------------------------------------------------------------------
+-- TODO
+function Comp_fw:get_compid_altid (id)
+    return self.competencies[id] and self.competencies[id].alt
+end
+
+--------------------------------------------------------------------------------
+-- TODO
+function Comp_fw:get_compid_domid (id)
+    return self.competencies[id] and self.competencies[id].domain
+end
+
+--------------------------------------------------------------------------------
 -- Returns the coefficient
 function Comp_fw:get_coefficient ()
     return self.coefficient or 1.0
