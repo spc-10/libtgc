@@ -310,30 +310,35 @@ end
 -- @param * the parameter to set
 function Tgc:set_student_name (sid, name)
     local s = self.students[sid]
-    if s then s:update({name = name}) end
+    if s then return s:update_name(name) end
 end
 function Tgc:set_student_lastname (sid, lastname)
     local s = self.students[sid]
-    if s then s:update({lastname = lastname}) end
+    if s then return s:update_lastname(lastname) end
 end
 function Tgc:set_student_nickname (sid, nickname)
     local s = self.students[sid]
-    if s then s:update({nickname = nickname}) end
+    if s then return s:update_nickname(nickname) end
 end
 function Tgc:set_student_place (sid, place)
     local s = self.students[sid]
-    if s then s:update({place = place}) end
+    if s then return s:update_place(place) end
 end
-function Tgc:set_student_adaptations (sid, extra_time, dyslexia, dyscalculia, enlarged_font)
+function Tgc:set_student_extra_time (sid, extra_time)
     local s = self.students[sid]
-    if s then
-        s:update({
-            extra_time    = extra_time,
-            dyslexia      = dyslexia,
-            dyscalculia   = dyscalculia,
-            enlarged_font = enlarged_font,
-        })
-    end
+    if s then return s:update_extra_time(extra_time) end
+end
+function Tgc:set_student_dyslexia (sid, dyslexia)
+    local s = self.students[sid]
+    if s then return s:update_dyslexia(dyslexia) end
+end
+function Tgc:set_student_dyscalculia (sid, dyscalculia)
+    local s = self.students[sid]
+    if s then return s:update_dyscalculia(dyscalculia) end
+end
+function Tgc:set_student_enlarged_font (sid, enlarged_font)
+    local s = self.students[sid]
+    if s then return s:update_enlarged_font(enlarged_font) end
 end
 
 --------------------------------------------------------------------------------

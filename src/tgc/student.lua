@@ -100,6 +100,7 @@ end
 
 ---------------------------------------------------------------------------------
 -- Update an existing student
+-- DEPRECATED
 -- @param o (table) - table containing the student attributes.
 -- @see Student.new()
 -- @return true if an attribute has been updated
@@ -161,6 +162,134 @@ function Student:update (o)
 
     return update_done
 end
+
+---------------------------------------------------------------------------------
+-- Update an existing student name
+-- @param new name
+-- @return true if update worked
+function Student:update_name (name)
+    if type(name) == "string" and not string.match(name, "^%s*$") then
+        self.name = name
+    else
+        return false -- on can not remove the student name
+    end
+
+    return true
+end
+
+---------------------------------------------------------------------------------
+-- Update an existing student lastname
+-- @param new lastname
+-- @return true if update worked
+function Student:update_lastname (lastname)
+    if type(lastname) == "string" and not string.match(lastname, "^%s*$") then
+        self.lastname = lastname
+    else
+        return false -- on can not remove the student lastname
+    end
+
+    return true
+end
+
+---------------------------------------------------------------------------------
+-- Update an existing student nickname
+-- @param new nickname
+-- @return true if update worked
+function Student:update_nickname (nickname)
+    if not nickname then -- removes the nickname
+        self.nickname = nil
+    elseif type(nickname) == "string" and not string.match(nickname, "^%s*$") then
+        self.nickname = nickname
+    else
+        return false -- error
+    end
+
+    return true
+end
+
+---------------------------------------------------------------------------------
+-- Update an existing student place
+-- @param new place
+-- @return true if update worked
+function Student:update_place (place)
+    if not place then -- removes the place
+        self.place = nil
+    else
+        place = tonumber(place)
+        if place then
+            self.place = place
+        else
+            return false -- error
+        end
+    end
+
+    return true
+end
+
+---------------------------------------------------------------------------------
+-- Update an existing student extra_time
+-- @param new extra_time
+-- @return true if update worked
+function Student:update_extra_time (extra_time)
+    if not extra_time or extra_time == false then -- removes the extra_time
+        self.extra_time = nil
+    elseif extra_time == true then
+        self.extra_time = true
+    else
+        return false -- error
+    end
+
+    return true
+end
+
+---------------------------------------------------------------------------------
+-- Update an existing student dyslexia
+-- @param new dyslexia
+-- @return true if update worked
+function Student:update_dyslexia (dyslexia)
+    if not dyslexia or dyslexia == false then -- removes the dyslexia
+        self.dyslexia = nil
+    elseif dyslexia == true then
+        self.dyslexia = true
+    else
+        return false -- error
+    end
+
+    return true
+end
+
+---------------------------------------------------------------------------------
+-- Update an existing student dyscalculia
+-- @param new dyscalculia
+-- @return true if update worked
+function Student:update_dyscalculia (dyscalculia)
+    if not dyscalculia or dyscalculia == false then -- removes the dyscalculia
+        self.dyscalculia = nil
+    elseif dyscalculia == true then
+        self.dyscalculia = true
+    else
+        return false -- error
+    end
+
+    return true
+end
+
+---------------------------------------------------------------------------------
+-- Update an existing student enlarged_font
+-- @param new enlarged_font
+-- @return true if update worked
+function Student:update_enlarged_font (enlarged_font)
+    if not enlarged_font or enlarged_font == false then -- removes the enlarged_font
+        self.enlarged_font = nil
+    elseif enlarged_font == true then
+        self.enlarged_font = true
+    else
+        return false -- error
+    end
+
+    return true
+end
+
 
 ---------------------------------------------------------------------------------
 -- Write the database in a file.
