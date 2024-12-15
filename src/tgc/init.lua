@@ -236,7 +236,7 @@ function Tgc:get_student_fullname_len (sids, style, nickname)
     local style = style or "no"
 
     sids = sids or self:find_students()
-    if not sids or not next(sids) then return nil end
+    if not sids or not next(sids) then return 0 end
 
     local maxlen = 0
     for _, sid in ipairs(sids) do
@@ -245,8 +245,6 @@ function Tgc:get_student_fullname_len (sids, style, nickname)
             local fullname = s:get_fullname(style, nickname)
             local len = utf8.len(fullname)
             maxlen = len > maxlen and len or maxlen
-        else
-            return nil
         end
     end
 
