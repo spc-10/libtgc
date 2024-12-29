@@ -178,27 +178,29 @@ end
 -- @fixme replace string.match by a method in student class
 function Tgc:find_students(fullname_p, class_p)
     local sids = {}
-    local classes = {}
 
     -- Checks if class is a pattern (look for magic characters)
-    if not class_p or class_p and string.match(class_p, "[%^%$%(%)%%%.%[%]%*%+%-%?]") then
+    if class_p and string.match(class_p, "[%^%$%(%)%%%.%[%]%*%+%-%?]") then
         if class_p == "*" then class_p = ".*" end
-        classes = self:get_classes_and_groups_list(class_p)
-    else
-        table.insert(classes, class_p)
     end
-    if not classes then return end
 
     -- Default name = all
     if not fullname_p or fullname_p == "*" then fullname_p = ".*" end
 
     for sid, s in ipairs(self.students) do
         if string.match(string.lower(s:get_fullname()), string.lower(fullname_p)) then
-            for _, class in ipairs(classes) do
-                if s:is_in_class(class) or s:is_in_group(class) then -- No need to check s:is_in_class(class)
-                    table.insert(sids, sid)
-                    break
+            if class_p then
+                local classes = self:get_classes_and_groups_list(class_p)
+                if classes then
+                    for _, class in ipairs(classes) do
+                        if s:is_in_class(class) or s:is_in_group(class) then -- No need to check s:is_in_class(class)
+                            table.insert(sids, sid)
+                            break
+                        end
+                    end
                 end
+            else
+                table.insert(sids, sid)
             end
         end
     end
