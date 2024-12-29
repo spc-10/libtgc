@@ -318,6 +318,14 @@ function Tgc:set_student_nickname (sid, nickname)
     local s = self.students[sid]
     if s then return s:update_nickname(nickname) end
 end
+function Tgc:set_student_class (sid, class)
+    local s = self.students[sid]
+    if s then return s:update_class(class) end
+end
+function Tgc:set_student_group (sid, group)
+    local s = self.students[sid]
+    if s then return s:update_group(group) end
+end
 function Tgc:set_student_place (sid, place)
     local s = self.students[sid]
     if s then return s:update_place(place) end

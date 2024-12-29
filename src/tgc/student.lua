@@ -208,6 +208,38 @@ function Student:update_nickname (nickname)
 end
 
 ---------------------------------------------------------------------------------
+-- Update an existing student class
+-- @param new name
+-- @return true if update worked
+function Student:update_class (class)
+    if not class then
+        self.class = nil
+    elseif type(class) == "string" and not string.match(class, "^%s*$") then
+        self.class = class
+    else
+        return false -- error
+    end
+
+    return true
+end
+
+---------------------------------------------------------------------------------
+-- Update an existing student group
+-- @param new name
+-- @return true if update worked
+function Student:update_group (group)
+    if not group then
+        self.group = nil
+    elseif type(group) == "string" and not string.match(group, "^%s*$") then
+        self.group = group
+    else
+        return false -- error
+    end
+
+    return true
+end
+
+---------------------------------------------------------------------------------
 -- Update an existing student place
 -- @param new place
 -- @return true if update worked
@@ -308,7 +340,9 @@ function Student:write (f)
         f:write(string.format(" gender = %q,",         self.gender))
     end
     f:write("\n    ")
-    f:write(string.format("class = %q,",               self.class))
+    if self.class then
+        f:write(string.format("class = %q,",           self.class))
+    end
     if self.group then
         f:write(string.format(" group = %q,",          self.group))
     end
