@@ -469,6 +469,7 @@ end
 function Student:add_grade (o)
     local o = o or {}
     local e = o.eval
+    o.student = self
 
     assert(e, "Cannot add a result with no associated evaluation to a student")
 
@@ -490,25 +491,41 @@ end
 ---------------------------------------------------------------------------------
 -- Update a grade
 -- @param o the evaluation result attributes table
--- FIXME Doesn't work yet
+-- @param date
 function Student:update_grade (o, date)
     local o = o or {}
     local e = o.eval
 
     assert(e, "Cannot add a result with no associated evaluation to a student")
 
-    -- Get the grade index corresponding to the evaluation date
-    -- (only usefull for multiple attemps evals).
-    -- FIXME
-    -- grade_index = e:get_date_index(date, self:get_class())
-
-    -- Get the result correspond to the eval ids.
+    -- Update the result
     local eid = e:get_id()
     local r = self.results[eid]
 
-    -- If the result exists, we try to update it.
     if r then
-        return r:update_grade(o, date)
+        r:update_grade(o, date)
+    else
+        return nil
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Remove a grade
+-- @param o the evaluation result attributes table
+-- Rem: o must contain the date of the evaluation (o.date)
+function Student:remove_grade (e, date)
+    assert(e, "Cannot add a result with no associated evaluation to a student")
+
+    -- Update the result
+    local eid = e:get_id()
+    local r = self.results[eid]
+
+    if r then
+        r:remove_grade(date)
+        if not r:get_grade() then -- remove empty result
+            self.results[eid] = nil
+        end
+        return true
     else
         return nil
     end
@@ -517,6 +534,7 @@ end
 ---------------------------------------------------------------------------------
 -- Get the results grade list corresponding to an evaluation.
 -- @return {{score_1, comp_grades_1}, {score_2, comp_grades_2}, ...}
+-- FIXME: to remove or to change by a loop with get_grade ()
 function Student:get_grade_list (eid)
     local r = self.results[eid]
 

@@ -419,7 +419,7 @@ end
 -- @param sid the student index
 -- @param eid the eval index
 -- @param o the result's attributes (see Result class)
-function Tgc:add_student_eval_grade (sid, eid, o)
+function Tgc:add_student_eval_grade (sid, eid, o, date)
     o = o or nil
     local s = self.students[sid]
     local e = self.evaluations[eid]
@@ -429,33 +429,36 @@ function Tgc:add_student_eval_grade (sid, eid, o)
         return nil
     end
 
-    -- Add date infos for this class and evaluation.
-    local _, group = s:get_class()
-    e:add_result_date(group, o.date)
-
     -- Eventually, adds the result
     o.eval = e
-    return s:add_grade(o)
+    local success = s:add_grade(o)
+
+    -- Add date infos for this class and evaluation.
+    if success then
+        local _, group = s:get_class()
+        e:add_result_date(group, date)
+    end
+
+    return success
+
 end
 
 --------------------------------------------------------------------------------
 -- Update an existing student's grade.
 -- @param sid the student index
 -- @param eid the eval index
--- @param date the date of the evaluation
 -- @param o the result's attributes (see Result class)
--- FIXME Doesn't work yet
-function Tgc:update_student_eval_grade (sid, eid, date, o)
+function Tgc:update_student_eval_grade (sid, eid, o, date)
     o = o or nil
     local s = self.students[sid]
     local e = self.evaluations[eid]
 
-    -- Check if student exists
+    -- check if student exists
     if not s or not e then
         return nil
     end
 
-    -- Eventually, updates the result
+    -- eventually, updates the result
     o.eval = e
     return s:update_grade(o, date)
 end
@@ -464,9 +467,18 @@ end
 -- Removes a student result from the database.
 -- @param sid the index of the student
 -- FIXME: Doesn't work yet
-function Tgc:remove_student_eval_grade (sid, ...)
+function Tgc:remove_student_eval_grade (sid, eid, date)
+    o = o or nil
     local s = self.students[sid]
-    if s then table.remove(self.students, sid) end
+    local e = self.evaluations[eid]
+
+    -- check if student exists
+    if not s or not e then
+        return nil
+    end
+
+    -- eventually, updates the result
+    return s:remove_grade(e, date)
 end
 
 --------------------------------------------------------------------------------
@@ -481,6 +493,7 @@ end
 
 --------------------------------------------------------------------------------
 -- Returns a list of the student results grades.
+-- TODO replace by a loop against Tgc:get_student_eval_grade()
 function Tgc:get_student_eval_grade_list (sid, eid)
     local s = self.students[sid]
     local e = self.evaluations[eid]
@@ -745,7 +758,8 @@ function Tgc:calc_students_comp_report (sids, cfwid, quarter)
         return nil
     end
 
-    local class_score, class_comp_grades
+    local class_score, class_score_nval
+    local class_comp_grades
     local class_dom_comp_sums, class_dom_comp_nval = {}, {}
     local domain_nb = self:get_compfw_domain_nb(cfwid)
 

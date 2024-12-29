@@ -12,6 +12,13 @@ local utils   = require "tgc.utils"
 local DEBUG   = utils.DEBUG
 local is_date_valid, is_quarter_valid = utils.is_date_valid, utils.is_quarter_valid
 
+--------------------------------------------------------------------------------
+-- Structure
+-- Result = {
+--      eval    = Eval,       -- The Eval object corresponding to the result
+--      student = Student,    -- The Student object corresponding to the result
+--      grades = {Grade1, …}, -- A table of Grade objects
+-- }
 
 
 --------------------------------------------------------------------------------
@@ -22,7 +29,7 @@ local is_date_valid, is_quarter_valid = utils.is_date_valid, utils.is_quarter_va
 -- @param val (number or string or table) @see Grade class
 -- @param eval_comp (table of number or string or table) will be a table of Grades
 -- @return Grade or a table of Grades
-local function create_grade (val, eval_comp)
+local function create_grades (val, eval_comp)
     local grades = {}
 
     if type(val) == "number" or type(val) == "string" then
@@ -88,46 +95,48 @@ function Result.new (o)
     local o = o or {}
     local r = setmetatable({}, Result_mt)
 
-    -- There must be a link to the corresponding evaluation
+    -- There must be a link to the corresponding evaluation and student
     -- We suppose that the format is correct!
     assert(type(o.eval) == "table",
         "result.eval should be a table containing the evaluation")
-    if not o.eval then
-        return nil -- TODO error msg
-    end
+    assert(type(o.student) == "table",
+        "result.student should be a table containing the student")
+    --if not o.eval then
+    --    return nil -- TODO error msg
+    --end
     -- TODO: assert for grades ?
 
     -- Assign attributes
-    r.eval                    = o.eval
-    r.student                 = o.student
+    r.eval                    = o.eval    -- Eval object
+    r.student                 = o.student -- Student object
     -- Grades can be a single object or a table of grades
     -- TODO: handle errors?
-    r.grades                  = create_grade(o.grades, o.eval.competencies)
+    r.grades                  = create_grades(o.grades, o.eval.competencies)
 
     return r
 end
 
 --------------------------------------------------------------------------------
 -- Add results to an existing one.
--- TODO To remove difinitively? -> It adds scores and competencies if allowed
--- (`allow_multi_attempts` is true).
 -- @param o (table) - same as in new()
 -- @return
 function Result:add_grade (o)
     o = o or {}
     self.grades = self.grades or {}
+    local e = self.eval
 
-    local competencies         = self.eval:get_competencies_infos()
-    --local allow_multi_attempts = self.eval:get_multi_infos()
+    local allow_multi_attempts = e:get_multi_infos()
+    local eval_comp            = e:get_competencies_infos()
 
-    --if not allow_multi_attempts then
-    --    return nil --TODO err msg
-    --else
-        local new_grades = create_grade(o.grades, competencies)
+    if not allow_multi_attempts and next(self.grades) then
+        return nil
+    else
+        local new_grades = create_grades(o.grades, eval_comp)
         for _, g in ipairs(new_grades) do
             table.insert(self.grades, g)
         end
-    --end
+        return new_grades
+    end
 end
 
 --------------------------------------------------------------------------------
@@ -135,24 +144,52 @@ end
 -- @param o (table) - table containing the evaluation attributes to modify.
 -- See Result.new()
 -- @return (bool) true if an update has been done, false otherwise.
--- FIXME: not working.
---function Result:update_grade (o)
---    local update_done = false
---
---    -- Update valid attributes
---    if o.competencies
---        and type(competencies) == "string"
---        and string.match(competencies, "^%s*$") then
---        self.competencies = tostring(o.competencies)
---        update_done = true
---    end
---    if tonumber(o.score) then
---        self.score = tonumber(o.score)
---        update_done = true
---    end
---
---    return update_done
---end
+function Result:update_grade (o, date)
+    local e = self.eval
+    local s = self.student
+
+    -- Find the index of the result grades
+    local gid = 1 -- default to first result grades
+    local allow_multi_attempts = e:get_multi_infos()
+    if allow_multi_attempts then
+        local class, group = s:get_class()
+        gid = e:get_result_id(date, class, group)
+        if not gid then
+            return nil
+        end
+    end
+
+    -- Update the result grades
+    if self.grades[gid] then
+        local eval_comp = e:get_competencies_infos()
+        local new_grade = create_grades(o.grades, eval_comp)
+        self.grades[gid] = table.unpack(new_grade)
+    end
+end
+
+--------------------------------------------------------------------------------
+-- Remove an existing evaluation result.
+-- @param o (table) - table containing the evaluation attributes to modify.
+-- See Result.new()
+-- @return (bool) true if an update has been done, false otherwise.
+function Result:remove_grade (date)
+    local e = self.eval
+    local s = self.student
+
+    -- Find the index of the result grades
+    local gid = 1 -- default to first result grades
+    local allow_multi_attempts = e:get_multi_infos()
+    if allow_multi_attempts then
+        local class, group = s:get_class()
+        gid = e:get_result_id(date, class, group)
+        if not gid then
+            return nil
+        end
+    end
+
+    -- Remove the result grades
+    return table.remove(self.grades, gid)
+end
 
 --------------------------------------------------------------------------------
 -- Write the evaluation result in a file.
@@ -186,6 +223,7 @@ end
 --------------------------------------------------------------------------------
 -- Return a list of the result grades.
 -- TODO Should only works with multiple attempts evaluations. Add checker?
+-- FIXME: loop with Result:get_grade
 function Result:get_grade_list ()
     local grade_list = {}
     if not self.grades or not next(self.grades) then
@@ -204,25 +242,30 @@ end
 -- the last one if no date.
 -- @param date[opt]
 function Result:get_grade (date)
-    --print("DEBUG Result:get_grade (date) | date = ", date)
+    local s, e = self.student, self.eval
+
     if not self.grades or not next(self.grades) then
         return nil
     end
 
     if not date then
-        --print("DEBUG Result:get_grade (date) | return = ", self.grades[#self.grades]:get_score_and_comp())
-        return self.grades[#self.grades]:get_score_and_comp()
+        local grade = self.grades[1]
+        return grade:get_score_and_comp()
     end
 
-    -- Find the grade corresponding to the date
-    assert(is_date_valid(date), "Impossible to get a grade corresponding to an invalid date!")
-    local class, group = self.student:get_class()
-    local gid = table.unpack(self.eval:get_result_ids(date, class, group)) -- FIXME
-    --print("DEBUG Result:get_grade (date) | gid = ", gid)
+    -- Find the index of the result grades
+    local gid = 1 -- default to first result grades
+    local allow_multi_attempts = e:get_multi_infos()
+    if allow_multi_attempts then
+        local class, group = s:get_class()
+        gid = e:get_result_id(date, class, group)
+        if not gid then
+            return nil
+        end
+    end
 
-    --print("DEBUG Result:get_grade (date) | self.grades[gid] = ", self.grades[gid])
-    if tonumber(gid) then
-        --print("DEBUG Result:get_grade (date) | self.grades[gid]:get_score_and_comp() = ", self.grades[gid]:get_score_and_comp())
+    -- Return the result grades
+    if self.grades[gid] then
         return self.grades[gid]:get_score_and_comp()
     else
         return nil

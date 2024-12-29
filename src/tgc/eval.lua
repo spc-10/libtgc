@@ -405,7 +405,8 @@ function Eval:get_competencies_infos ()
 end
 
 -- Returns the result ids corresponding to given dates
-function Eval:get_result_ids (dates_list, class, group)
+-- FIXME Doesn't work
+function Eval:get_result_id (date, class, group)
     -- dates_list should be a date (string) array or a date (string)
     --print("DEBUG DEBUG Eval:get_result_ids() | type(dates_list) = ", type(dates_list))
     dates_list = dates_list or {}
