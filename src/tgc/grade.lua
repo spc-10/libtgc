@@ -353,6 +353,9 @@ function Grade:calc_mean ()
             if score then
                 sum[id]  = (sum[id]  or 0) + score
                 nval[id] = (nval[id] or 0) + 1
+            else
+                sum[id]  = sum[id]  or 0
+                nval[id] = nval[id] or 0
             end
         end
 
@@ -360,12 +363,12 @@ function Grade:calc_mean ()
         total_score = 0
         for id, sum in pairs(sum) do
             local mean_score
-            if nval[id] then
+            if nval[id] and nval[id] ~= 0 then
                 mean_score = sum / nval[id]
             end
 
-            if mean_score and n == 3 then
-                if nval[id] == 0 then
+            if n == 3 then
+                if nval[id] == 0 or not mean_score then
                     unsorted_mean_comp_grades[id] = "-"
                 elseif mean_score > 0.85 then
                     unsorted_mean_comp_grades[id] = "A"
