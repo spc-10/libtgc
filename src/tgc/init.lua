@@ -330,6 +330,10 @@ function Tgc:set_student_place (sid, place)
     local s = self.students[sid]
     if s then return s:update_place(place) end
 end
+function Tgc:set_student_email (sid, email)
+    local s = self.students[sid]
+    if s then return s:update_email(email) end
+end
 function Tgc:set_student_extra_time (sid, extra_time)
     local s = self.students[sid]
     if s then return s:update_extra_time(extra_time) end

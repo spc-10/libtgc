@@ -72,6 +72,7 @@ function Student.new (o)
     s.gender         = o.gender
     s.class          = o.class
     s.group          = o.group
+    s.email          = o.email
     s.dyslexia       = o.dyslexia and true or nil
     s.dyscalculia    = o.dyscalculia and true or nil
     s.enlarged_font  = o.enlarged_font and true or nil
@@ -259,6 +260,20 @@ function Student:update_place (place)
 end
 
 ---------------------------------------------------------------------------------
+-- Update an existing student email
+-- @param new extra_time
+-- @return true if update worked
+function Student:update_email (email)
+    if not email then -- removes the extra_time
+        self.email = nil
+    else
+        self.email = tostring(email)
+    end
+
+    return true
+end
+
+---------------------------------------------------------------------------------
 -- Update an existing student extra_time
 -- @param new extra_time
 -- @return true if update worked
@@ -349,6 +364,33 @@ function Student:write (f)
     if self.place then
         f:write(string.format(" place = %d,",          self.place))
     end
+    f:write("\n    ")
+    if self.email then
+        f:write(string.format("email = %q,",           self.email))
+    end
+
+    -- Adaptations
+    local space = ""
+    if self.extra_time or self.dyslexia or self.dyscalculia or self.enlarged_font then
+        f:write("\n    ")
+        if self.extra_time then
+            f:write(string.format("extra_time = %q,",  self.extra_time))
+            space = " "
+        end
+        if self.dyslexia then
+            f:write(string.format("%sdyslexia = %q,",  space, self.dyslexia))
+            space = " "
+        end
+        if self.dyscalculia then
+            f:write(string.format("%sdyscalculia = %q,", space, self.dyscalculia))
+            space = " "
+        end
+        if self.enlarged_font then
+            f:write(string.format("%senlarged_font = %q,", space, self.enlarged_font))
+            space = " "
+        end
+    end
+    f:write("\n")
 
     -- Adaptations
     local space = ""
