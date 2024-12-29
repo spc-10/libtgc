@@ -144,15 +144,18 @@ function Tgc:add_student (o)
     local s = Student.new(o)
     table.binsert(self.students, s) -- Binary insertion.
 
-    -- FIXME do not add empty "" class and group
     -- Add class to the database list.
     if not self:class_exists(o.class) then
-        table.insert(self.classes, o.class)
+        if o.class and type(o.class) == "string" and not string.match(o.class, "^%s*$") then
+            table.insert(self.classes, o.class)
+        end
     end
 
     -- Same for groups
     if not self:group_exists(o.group) then
-        table.insert(self.groups, o.group)
+        if o.group and type(o.group) == "string" and not string.match(o.group, "^%s*$") then
+            table.insert(self.groups, o.group)
+        end
     end
 end
 
